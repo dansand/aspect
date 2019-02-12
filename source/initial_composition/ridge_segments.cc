@@ -100,11 +100,11 @@ namespace aspect
               if (dim == 2)
                 temp_distance = std::abs(surface_position[0]-point_list[i_segments][0][0]);
               else
-                temp_distance = std::abs(Utilities::distance_to_line(point_list[i_segments], surface_position);
+                temp_distance = std::abs(Utilities::distance_to_line<dim>(point_list[i_segments], surface_position));
             }
           // chunk (spherical) geometries
           else
-            temp_distance = (dim == 2) ? std::abs(surface_position[0]-point_list[i_segments][0][0]) : Utilities::distance_to_line(point_list[i_segments], surface_position);
+            temp_distance = (dim == 2) ? std::abs(surface_position[0]-point_list[i_segments][0][0]) : Utilities::distance_to_line<dim>(point_list[i_segments], surface_position);
 
           // Get the minimum distance
           distance_to_rift_axis = std::min(distance_to_rift_axis, temp_distance);
