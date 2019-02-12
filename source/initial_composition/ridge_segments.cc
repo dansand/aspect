@@ -100,7 +100,7 @@ namespace aspect
               if (dim == 2)
                 temp_distance = std::abs(surface_position[0]-point_list[i_segments][0][0]);
               else
-                temp_distance = std::abs(Utilities::distance_to_line(point_list[i_segments], surface_position));
+                temp_distance = std::abs(Utilities::distance_to_line(point_list[i_segments], surface_position);
             }
           // chunk (spherical) geometries
           else
