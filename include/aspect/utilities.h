@@ -269,11 +269,12 @@ namespace aspect
      * distance of the point to the polygon. The sign is negative for points outside of
      * the polygon and positive for points inside the polygon.
      */
+
+
     template <int dim>
     double
     signed_distance_to_polygon(const std::vector<Point<2> > &point_list,
                                const dealii::Point<2> &point);
-
 
     /**
      * Given a 2d point and a list of two points that define a line, compute the smallest
@@ -281,12 +282,14 @@ namespace aspect
      * base does not lie on the line segment, the smallest distance to the segment's end
      * points is calculated.
      */
+    //double
+    //distance_to_line(const std::array<dealii::Point<2>,2 > &point_list,
+    //                 const dealii::Point<2> &point);
 
-
-     template <int dim>
-     double
-     distance_to_line(const std::vector<dealii::Point<2> > &point_list,
-                      const dealii::Point<2> &point);
+    template <int dim>
+    double
+    distance_to_line(const std::vector<dealii::Point<2> > &point_list,
+                     const dealii::Point<2> &point);
 
     /**
      * Given a vector @p v in @p dim dimensional space, return a set
