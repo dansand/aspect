@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -164,11 +164,8 @@ namespace aspect
   template <int dim>
   void FreeSurfaceHandler<dim>::set_assemblers()
   {
-    aspect::Assemblers::ApplyStabilization<dim> *surface_stabilization
-      = new aspect::Assemblers::ApplyStabilization<dim>();
-
     sim.assemblers->stokes_system.push_back(
-      std::unique_ptr<aspect::Assemblers::ApplyStabilization<dim> > (surface_stabilization));
+      std_cxx14::make_unique<aspect::Assemblers::ApplyStabilization<dim>> ());
 
     // Note that we do not want face_material_model_data, because we do not
     // connect to a face assembler. We instead connect to a normal assembler,
@@ -181,6 +178,8 @@ namespace aspect
         update_normal_vectors |
         update_JxW_values);
   }
+
+
 
   template <int dim>
   void FreeSurfaceHandler<dim>::declare_parameters(ParameterHandler &prm)
@@ -310,15 +309,15 @@ namespace aspect
     mesh_displacement_constraints.clear();
     mesh_displacement_constraints.reinit(mesh_locally_relevant);
 
-    // mesh_displacement_constraints can use the same hanging node
-    // information that was used for mesh_vertex constraints.
-    mesh_displacement_constraints.merge(mesh_vertex_constraints);
-
-    // Add the vanilla periodic boundary constraints
+    // Set the vanilla periodic boundary constraints
     typedef std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> > periodic_boundary_pairs;
     periodic_boundary_pairs pbp = sim.geometry_model->get_periodic_boundary_pairs();
     for (periodic_boundary_pairs::iterator p = pbp.begin(); p != pbp.end(); ++p)
       DoFTools::make_periodicity_constraints(free_surface_dof_handler, (*p).first.first, (*p).first.second, (*p).second, mesh_displacement_constraints);
+
+    // mesh_displacement_constraints can use the same hanging node
+    // information that was used for mesh_vertex constraints.
+    mesh_displacement_constraints.merge(mesh_vertex_constraints);
 
     // Zero out the displacement for the zero-velocity boundary indicators
     for (std::set<types::boundary_id>::const_iterator p = sim.boundary_velocity_manager.get_zero_boundary_velocity_indicators().begin();
@@ -418,15 +417,18 @@ namespace aspect
     // stuff for getting the velocity values
     std::vector<Tensor<1,dim> > velocity_values(n_face_q_points);
 
-    // set up constraints
+    // set up constraints:
     ConstraintMatrix mass_matrix_constraints(mesh_locally_relevant);
-    DoFTools::make_hanging_node_constraints(free_surface_dof_handler, mass_matrix_constraints);
-
     typedef std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> > periodic_boundary_pairs;
     periodic_boundary_pairs pbp = sim.geometry_model->get_periodic_boundary_pairs();
     for (periodic_boundary_pairs::iterator p = pbp.begin(); p != pbp.end(); ++p)
       DoFTools::make_periodicity_constraints(free_surface_dof_handler,
                                              (*p).first.first, (*p).first.second, (*p).second, mass_matrix_constraints);
+
+    // Note: periodic constraints have to be added _before_ we do hanging node
+    // constraints, because inconsistent contraints could be generated in
+    // parallel otherwise.
+    DoFTools::make_hanging_node_constraints(free_surface_dof_handler, mass_matrix_constraints);
 
     mass_matrix_constraints.close();
 
@@ -753,8 +755,9 @@ namespace aspect
     mesh_vertex_constraints.close();
 
     // Now reset the mapping of the simulator to be something that captures mesh deformation in time.
-    sim.mapping.reset (new MappingQ1Eulerian<dim, LinearAlgebra::Vector> (free_surface_dof_handler,
-                                                                          mesh_displacements));
+    sim.mapping
+      = std_cxx14::make_unique<MappingQ1Eulerian<dim, LinearAlgebra::Vector>> (free_surface_dof_handler,
+                                                                               mesh_displacements);
   }
 
   template <int dim>

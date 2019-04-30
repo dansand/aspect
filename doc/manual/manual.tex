@@ -148,7 +148,7 @@ COMPUTATIONAL INFRASTRUCTURE FOR GEODYNAMICS (CIG)
 \hfill{\Huge \fontfamily{\sfdefault}\selectfont User Manual \\
 \raggedleft \huge \fontfamily{\sfdefault}\selectfont Version
 % keep the following line as is so that we can replace this using a script:
-2.1.0-pre %VERSION-INFO%
+2.2.0-pre %VERSION-INFO%
 \\\large(generated \today)\\
 {\Large Wolfgang Bangerth\\Juliane Dannberg\\Rene Gassm{\"o}ller\\Timo Heister\\}
 }
@@ -331,7 +331,7 @@ Also see \cite{aspect-doi-v1.5.0,aspect-doi-v2.0.0,aspect-doi-v2.0.1,aspectmanua
 The development of \aspect{} has been funded
 through a variety of grants to the authors. Most immediately, it has been
 supported through the Computational Infrastructure in Geodynamics
-grant, initially by the CIG-I grant (National Science Foundation Award No. EAR-0426271,
+(CIG), initially by the CIG-I grant (National Science Foundation Award No. EAR-0426271,
 via The California Institute of Technology) and later by the CIG-II
 and CIG-III grants
 (National Science Foundation Awards No. EAR-0949446 and EAR-1550901, via The University
@@ -350,6 +350,15 @@ which is supported by the National Science Foundation award EAR-1550901.
     }
   \end{center}
 }
+
+The \aspect{} community as a whole, and a number of the primary
+developers in particular, owe great thanks to Louise Kellogg
+who, when she was the head of CIG, was a strong supporter of the
+\aspect{} project. Louise loved how collaborative the \aspect{}
+development model was, and how many people contributed. Louise passed
+away far too early in 2019, but her support lives on in the spirit of
+this project.
+
 
 \section{Geodynamic modeling assumptions and numerical methods in \aspect{}}
 \label{sec:models}
@@ -1630,15 +1639,17 @@ algorithms:
 \end{itemize}
 
 Rather than detailing the various techniques upon which \aspect{} is built, we
-refer to the paper by Kronbichler, Heister and Bangerth \cite{KHB12} that
-gives a detailed description and rationale for the various building blocks.
+refer to the papers by Kronbichler, Heister and Bangerth \cite{KHB12} 
+and Heister, Dannberg, Gassm{\"o}ller and Bangerth \cite{heister_aspect_methods2}
+that
+give a detailed description and rationale for the various building blocks.
 
 
 \subsection{Approximate equations}
 \label{sec:approximate-equations}
 
 There are a number of common variations to equations
-\eqref{eq:stokes-1}--\eqref{eq:temperature} that are frequently used in the
+\eqref{eq:stokes-1}--\eqref{eq:temperature} that are used in the
 geosciences. For example, one frequently finds references to the anelastic liquid
 approximation (ALA), truncated anelastic liquid approximation (TALA), and the
 Boussinesq approximation (BA). These can all be derived from the basic
@@ -3174,6 +3185,7 @@ aspect> ls -l output/
 total 932
 -rw-rw-r-- 1 bangerth bangerth  11134 Dec 11 10:08 depth_average.gnuplot
 -rw-rw-r-- 1 bangerth bangerth  11294 Dec 11 10:08 log.txt
+-rw-rw-r-- 1 bangerth bangerth     42 Dec 11 10:07 original.prm
 -rw-rw-r-- 1 bangerth bangerth 326074 Dec 11 10:07 parameters.prm
 -rw-rw-r-- 1 bangerth bangerth 577138 Dec 11 10:07 parameters.tex
 drwxr-xr-x 2 bangerth bangerth   4096 Dec 11 10:08 solution
@@ -3183,16 +3195,31 @@ drwxr-xr-x 2 bangerth bangerth   4096 Dec 11 10:08 solution
 \end{lstlisting}
 The purpose of these files is as follows:
 \begin{itemize}
-\item \textit{A listing of all run-time parameters:} The
-  \texttt{output/parameters.prm} file contains a complete listing of all
+
+\item \textit{Screen output:} The file \texttt{output/log.txt} contains a copy
+  of the output that is printed to the terminal when you run \aspect{}.
+
+\item \textit{A listing of all run-time parameters:} The file
+  \texttt{output/original.prm} is a copy of the parameter file that was used
+  in this computation. It is often useful to save this file together with
+  simulation data to allow for the easy reproduction of computations later on.
+
+  The \texttt{output/parameters.prm} file contains a complete listing of all
   run-time parameters. In particular, this includes the ones that have been
   specified in the input parameter file passed on the command line, but it
-  also includes those parameters for which defaults have been used. It is
-  often useful to save this file together with simulation data to allow for
-  the easy reproduction of computations later on.
+  also includes those parameters for which defaults have been used. This file
+  can also be used to explore all available parameters and possible options as
+  it contains the documentation of all parameters.
+
+  Finally, there is \texttt{output/parameters.tex}, that lists the parameters
+  like \texttt{output/parameters.prm} in \LaTeX{} format, and
+  \texttt{output/parameters.json} in JSON format.
   
-  There is a second file, \texttt{output/parameters.prm}, that lists these
-  parameters in \LaTeX{} format.
+  While \texttt{output/parameters.prm} contains all parameters (with their
+  default values if they were not specified), all formatting and comments are
+  lost. As \texttt{output/original.prm} is identical to the prm you started
+  \aspect{} with, it preserves comments and formatting while not outputting
+  the default values (or documentation).
 
 \item \textit{Graphical output files:} One of the postprocessors chosen
   in the parameter file used for this computation is the one that generates
@@ -6614,9 +6641,12 @@ can be much more expensive. Both approaches can be used to actively influence th
 \label{sec:geomio}
 \textit{This section was contributed by Juliane Dannberg}
 
+\note{This cookbook is based on a developer version of geomIO from July 2016. In the meantime, the development of 
+geomIO continued, and there is now a publication\cite{bauvillegeomio} that describes its features and how they can be used in more detail.}
+
 Many geophysical setups require initial conditions with several different materials and complex geometries. 
 Hence, sometimes it would be easier to generate the initial geometries of the materials as a drawing instead 
-of by writing code. The MATLAB-based library geomIO (\url{http://geomio.bitbucket.org/}) provides a convenient tool
+of by writing code. The MATLAB-based library geomIO (\url{https://bitbucket.org/geomio/geomio}, \cite{bauvillegeomio}) provides a convenient tool
 to convert a drawing generated with the vector graphics editor Inkscape (\url{https://inkscape.org/en/}) to a data 
 file that can be read into \aspect{}. Here, we will demonstrate how this can be done for a 2D setup for a model
 with one compositional field, but geomIO also has the capability to create 3D volumes based on a series of 2D vector 
@@ -8793,7 +8823,7 @@ As already mentioned above, using a half width parameter proportional to the mes
 
 \begin{table}[htb]
         \center
-        \begin{tabular}{|c|ccccc|}
+        \begin{tabular}{|c|cccc|}
                 \hline
                 Global & \multicolumn{4}{|c|}{Number of Processors} \\
                 Refinements & 4 & 8 & 12 & 16
@@ -10478,7 +10508,7 @@ library for model specific changes are discussed in
 Section~\ref{sec:prescribed-velocities}, and in
 Section~\ref{sec:cookbooks-inner-core-convection}. We will discuss the concept
 begind plugins in Section~\ref{sec:plugins}, and how to write a plugin in
-Section~{sec:write-plugin}.
+Section~\ref{sec:write-plugin}.
 \end{enumerate}
 
 Since \aspect{} is written in C++ using the \dealii{} library, you

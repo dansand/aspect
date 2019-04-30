@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -857,12 +857,17 @@ namespace aspect
                                             :
                                             (1.0 - background_porosity) / (amplitude * background_porosity) * global_velocity_divergence_min);
 
+      const double relative_error = (analytical_growth_rate != 0.0) ?
+                                    std::abs(numerical_growth_rate - analytical_growth_rate)/analytical_growth_rate
+                                    :
+                                    1.0;
+
       // compute and output error
       std::ostringstream os;
       os << std::scientific << initial_band_angle
          << ", " << analytical_growth_rate
          << ", " << numerical_growth_rate
-         << ", " << std::abs(numerical_growth_rate - analytical_growth_rate)/analytical_growth_rate;
+         << ", " << relative_error;
 
       return std::make_pair("Initial angle, Analytical growth rate, Modelled growth rate, Error:", os.str());
     }

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2017 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -146,8 +146,7 @@ namespace aspect
                                   "and conductive heat flux through Dirichlet "
                                   "boundaries, which is computed using the "
                                   "consistent boundary flux method as described "
-                                  "in ``Gresho, P. M., Lee, R. L., Sani, R. L., "
-                                  "Maslanik, M. K., & Eaton, B. E. (1987). "
+                                  "in ``Gresho, Lee, Sani, Maslanik, Eaton (1987). "
                                   "The consistent Galerkin FEM for computing "
                                   "derived boundary quantities in thermal and or "
                                   "fluids problems. International Journal for "

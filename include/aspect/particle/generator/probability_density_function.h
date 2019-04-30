@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015 - 2017 by the authors of the ASPECT code.
+ Copyright (C) 2015 - 2019 by the authors of the ASPECT code.
 
  This file is part of ASPECT.
 
@@ -86,7 +86,7 @@ namespace aspect
            */
           virtual
           void
-          generate_particles(std::multimap<types::LevelInd, Particle<dim> > &particles);
+          generate_particles(std::multimap<Particles::internal::LevelInd, Particle<dim> > &particles);
 
           /**
            * Declare the parameters this class takes through input files.
@@ -146,16 +146,16 @@ namespace aspect
            *
            * @param [in] particles_per_cell A vector with n_locally_owned_cells entries
            * that determines how many particles are generated in each cell.
-           * @param [in] local_start_id The starting ID to assign to generated particles of the local process.
+           * @param [in] first_particle_index The starting ID to assign to generated particles of the local process.
            * @param [in] n_local_particles The total number of particles to generate locally.
            * @param [out] particles A map between cells and all generated particles.
            *
            */
           void
           generate_particles_in_subdomain (const std::vector<unsigned int> &particles_per_cell,
-                                           const types::particle_index local_start_id,
+                                           const types::particle_index first_particle_index,
                                            const types::particle_index n_local_particles,
-                                           std::multimap<types::LevelInd, Particle<dim> > &particles);
+                                           std::multimap<Particles::internal::LevelInd, Particle<dim> > &particles);
 
           /**
            * This function loops over all active cells in the local subdomain

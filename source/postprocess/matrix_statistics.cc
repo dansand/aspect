@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2017 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -31,7 +31,7 @@ namespace
 {
   const std::string
   get_stats(const aspect::LinearAlgebra::BlockSparseMatrix &matrix,
-            const std::string matrix_name,
+            const std::string &matrix_name,
             const MPI_Comm &comm)
   {
     std::ostringstream output;
@@ -52,7 +52,12 @@ namespace
     // is kept here, even though explicitly setting a facet should always work.
     try
       {
-        output.imbue(std::locale(std::locale(), new aspect::Utilities::ThousandSep));
+        // Imbue the stream with a locale that does the right thing. The
+        // locale is responsible for later deleting the object pointed
+        // to by the last argument (the "facet"), see
+        // https://en.cppreference.com/w/cpp/locale/locale/locale
+        output.imbue(std::locale(std::locale(),
+                                 new aspect::Utilities::ThousandSep));
       }
     catch (const std::runtime_error &e)
       {

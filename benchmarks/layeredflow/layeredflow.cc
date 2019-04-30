@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -66,7 +66,7 @@ namespace aspect
       double
       LayeredFlow_pressure (const Point<2> &,
                             const double &,
-                            const double epsilon)
+                            const double)
       {
         return 0;
       }

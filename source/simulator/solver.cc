@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -427,8 +427,8 @@ namespace aspect
     build_advection_preconditioner(advection_field, preconditioner);
 
     TimerOutput::Scope timer (computing_timer, (advection_field.is_temperature() ?
-                                                "   Solve temperature system" :
-                                                "   Solve composition system"));
+                                                "Solve temperature system" :
+                                                "Solve composition system"));
     if (advection_field.is_temperature())
       {
         pcout << "   Solving temperature system... " << std::flush;
@@ -524,7 +524,7 @@ namespace aspect
   std::pair<double,double>
   Simulator<dim>::solve_stokes ()
   {
-    TimerOutput::Scope timer (computing_timer, "   Solve Stokes system");
+    TimerOutput::Scope timer (computing_timer, "Solve Stokes system");
     pcout << "   Solving Stokes system... " << std::flush;
 
     // extract Stokes parts of solution vector, without any ghost elements
