@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -237,8 +237,8 @@ namespace aspect
         virtual ~NewtonStokesPreconditioner () {}
 
         void
-        execute (internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                 internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute (internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                 internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
 
     /**
@@ -252,8 +252,8 @@ namespace aspect
         virtual ~NewtonStokesIncompressibleTerms () {}
 
         void
-        execute (internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                 internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute (internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                 internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
 
     /**
@@ -269,8 +269,8 @@ namespace aspect
 
         virtual
         void
-        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
 
     /**
@@ -288,8 +288,8 @@ namespace aspect
 
         virtual
         void
-        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
 
     /**
@@ -309,8 +309,8 @@ namespace aspect
 
         virtual
         void
-        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
 
     /**
@@ -328,8 +328,8 @@ namespace aspect
 
         virtual
         void
-        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch,
-                internal::Assembly::CopyData::CopyDataBase<dim> &data) const;
+        execute(internal::Assembly::Scratch::ScratchBase<dim>  &scratch_base,
+                internal::Assembly::CopyData::CopyDataBase<dim> &data_base) const;
     };
   }
 }

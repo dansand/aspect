@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2015 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -41,7 +41,7 @@ namespace aspect
         while (in.peek() == '#')
           {
             std::string temp;
-            getline(in,temp);
+            std::getline(in,temp);
           }
 
         // Read data lines

@@ -1,4 +1,4 @@
-# Copyright (C) 2013 - 2018 by the authors of the ASPECT code.
+# Copyright (C) 2013 - 2019 by the authors of the ASPECT code.
 #
 # This file is part of ASPECT.
 #
@@ -67,6 +67,13 @@ ENDIF()
 GET_PROPERTY(_COMPILE_FLAGS TARGET aspect PROPERTY COMPILE_FLAGS)
 _detailed("#
 #        COMPILE_FLAGS:             ${_COMPILE_FLAGS}
+")
+
+_detailed("#
+#        _WITH_CXX14:               ${DEAL_II_WITH_CXX14}
+#        _WITH_CXX17:               ${DEAL_II_WITH_CXX17}
+#        _MPI_VERSION:              ${DEAL_II_MPI_VERSION}
+#        _WITH_64BIT_INDICES:       ${DEAL_II_WITH_64BIT_INDICES}
 ")
 
 

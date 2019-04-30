@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -440,11 +440,11 @@ namespace aspect
                                       constant_modes);
 
     if (parameters.include_melt_transport)
-      Mp_preconditioner.reset (new LinearAlgebra::PreconditionAMG());
+      Mp_preconditioner = std_cxx14::make_unique<LinearAlgebra::PreconditionAMG>();
     else
-      Mp_preconditioner.reset (new LinearAlgebra::PreconditionILU());
+      Mp_preconditioner = std_cxx14::make_unique<LinearAlgebra::PreconditionILU>();
 
-    Amg_preconditioner.reset (new LinearAlgebra::PreconditionAMG());
+    Amg_preconditioner = std_cxx14::make_unique<LinearAlgebra::PreconditionAMG>();
 
     LinearAlgebra::PreconditionAMG::AdditionalData Amg_data;
 #ifdef ASPECT_USE_PETSC

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -23,6 +23,7 @@
 #include <aspect/global.h>
 #include <aspect/utilities.h>
 #include <aspect/melt.h>
+#include <aspect/volume_of_fluid/handler.h>
 #include <aspect/newton.h>
 #include <aspect/free_surface.h>
 
@@ -829,26 +830,30 @@ namespace aspect
                          "When using a locally "
                          "conservative discretization, the finite element space for "
                          "the pressure is discontinuous between cells and is the "
-                         "polynomial space $P_ {-q}$ of polynomials of degree $q$ in "
-                         "each variable separately. Here, $q$ is one less than the value "
-                         "given in the parameter ``Stokes velocity polynomial degree''. "
-                         "As a consequence of choosing this "
-                         "element, it can be shown if the medium is considered incompressible "
-                         "that the computed discrete velocity "
+                         "polynomial space $P_{-(k-1)}$ of polynomials of degree $k-1$ in "
+                         "each variable separately. Here, $k$ is the value "
+                         "given in the parameter ``Stokes velocity polynomial degree'', and "
+                         "consequently the polynomial degree for the pressure, $k-1$, is one "
+                         "lower than that for the velocity."
+                         "\n\n"
+                         "As a consequence of choosing this element for the pressure rather "
+                         "than the more commonly used $Q_{k-1}$ element that is continuous, "
+                         "it can be shown that if the medium is considered incompressible "
+                         "then the computed discrete velocity "
                          "field $\\mathbf u_h$ satisfies the property $\\int_ {\\partial K} \\mathbf u_h "
                          "\\cdot \\mathbf n = 0$ for every cell $K$, i.e., for each cell inflow and "
                          "outflow exactly balance each other as one would expect for an "
-                         "incompressible medium. In other words, the velocity field is locally "
-                         "conservative."
+                         "incompressible medium. In other words, the velocity field is "
+                         "\\textit{locally conservative}."
                          "\n\n"
-                         "On the other hand, if this parameter is "
-                         "set to ``false'', then the finite element space is chosen as $Q_q$. "
+                         "On the other hand, if this parameter is set to ``false''"
+                         "(the default), then the finite element space is chosen as $Q_{k-1}$. "
                          "This choice does not yield the local conservation property but "
                          "has the advantage of requiring fewer degrees of freedom. Furthermore, "
                          "the error is generally smaller with this choice."
                          "\n\n"
                          "For an in-depth discussion of these issues and a quantitative evaluation "
-                         "of the different choices, see \\cite {KHB12} .");
+                         "of the different choices, see \\cite {KHB12}.");
       prm.declare_entry ("Use discontinuous temperature discretization", "false",
                          Patterns::Bool (),
                          "Whether to use a temperature discretization that is discontinuous "
@@ -1000,7 +1005,7 @@ namespace aspect
                          Patterns::List(Patterns::Anything()),
                          "A user-defined name for each of the compositional fields requested.");
       prm.declare_entry ("Compositional field methods", "",
-                         Patterns::List (Patterns::Selection("field|particles|static|melt field|prescribed field|prescribed field with diffusion")),
+                         Patterns::List (Patterns::Selection("field|particles|volume of fluid|static|melt field|prescribed field|prescribed field with diffusion")),
                          "A comma separated list denoting the solution method of each "
                          "compositional field. Each entry of the list must be "
                          "one of the currently implemented field types: "
@@ -1024,6 +1029,13 @@ namespace aspect
                          "and particle properties can react with each other as well. "
                          "See Section~\\ref{sec:particles} for more information about "
                          "how particles behave."
+                         "\n"
+                         "\\item ``volume of fluid``: If a compositional field "
+                         "is marked with this method, then its values are "
+                         "obtained in each timestep by reconstructing a "
+                         "polynomial finite element approximation on each cell "
+                         "from a volume of fluid interface tracking method, "
+                         "which is used to compute the advection updates."
                          "\n"
                          "\\item ``static'': If a compositional field is marked "
                          "this way, then it does not evolve at all. Its values are "
@@ -1114,6 +1126,17 @@ namespace aspect
                          "which can be used in combination with other material models.");
     }
     prm.leave_subsection ();
+
+    prm.enter_subsection ("Volume of Fluid");
+    {
+      prm.declare_entry ("Enable interface tracking", "false",
+                         Patterns::Bool (),
+                         "When set to true, Volume of Fluid interface tracking will be used");
+    }
+    prm.leave_subsection ();
+
+    // declare the VolumeOfFluid parameters
+    VolumeOfFluidHandler<dim>::declare_parameters(prm);
 
     // also declare the parameters that the FreeSurfaceHandler needs
     FreeSurfaceHandler<dim>::declare_parameters (prm);
@@ -1586,6 +1609,8 @@ namespace aspect
             compositional_field_methods[i] = AdvectionFieldMethod::fem_field;
           else if (x_compositional_field_methods[i] == "particles")
             compositional_field_methods[i] = AdvectionFieldMethod::particles;
+          else if (x_compositional_field_methods[i] == "volume of fluid")
+            compositional_field_methods[i] = AdvectionFieldMethod::volume_of_fluid;
           else if (x_compositional_field_methods[i] == "static")
             compositional_field_methods[i] = AdvectionFieldMethod::static_field;
           else if (x_compositional_field_methods[i] == "melt field")
@@ -1597,6 +1622,11 @@ namespace aspect
           else
             AssertThrow(false,ExcNotImplemented());
         }
+
+      // Enable Volume of Fluid field tracking if any compositional_field_methods are volume_of_fluid
+      volume_of_fluid_tracking_enabled =
+        (std::count(compositional_field_methods.begin(),compositional_field_methods.end(),AdvectionFieldMethod::volume_of_fluid)
+         > 0);
 
       if (std::find(compositional_field_methods.begin(), compositional_field_methods.end(), AdvectionFieldMethod::fem_melt_field)
           != compositional_field_methods.end())
@@ -1718,7 +1748,6 @@ namespace aspect
           (prm.get ("Material averaging"));
     }
     prm.leave_subsection ();
-
 
     // then, finally, let user additions that do not go through the usual
     // plugin mechanism, declare their parameters if they have subscribed

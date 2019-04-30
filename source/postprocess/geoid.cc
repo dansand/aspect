@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2015 - 2018 by the authors of the ASPECT code.
+ Copyright (C) 2015 - 2019 by the authors of the ASPECT code.
 
  This file is part of ASPECT.
 
@@ -165,7 +165,7 @@ namespace aspect
         this->get_postprocess_manager().template get_matching_postprocessor<Postprocess::DynamicTopography<dim> >();
 
       // Get the already-computed dynamic topography solution.
-      const LinearAlgebra::BlockVector topo_vector = dynamic_topography.topography_vector();
+      const LinearAlgebra::BlockVector &topo_vector = dynamic_topography.topography_vector();
 
       // Get a pointer to the boundary densities postprocessor.
       const Postprocess::BoundaryDensities<dim> &boundary_densities =
@@ -315,7 +315,7 @@ namespace aspect
       // Current geoid code only works for spherical shell geometry
       const GeometryModel::SphericalShell<dim> *geometry_model = dynamic_cast<const GeometryModel::SphericalShell<dim> *>
                                                                  (&this->get_geometry_model());
-      AssertThrow (geometry_model != 0 && dim == 3,
+      AssertThrow (geometry_model != nullptr && dim == 3,
                    ExcMessage("The geoid postprocessor is currently only implemented for the 3D spherical shell geometry model."));
 
       // Get the value of the outer radius and inner radius

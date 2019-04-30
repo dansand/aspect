@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2017 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -71,7 +71,7 @@ namespace aspect
 
       /* The input viscosity file has two columns that are the viscosity and Depth */
       std::string header;
-      getline(in, header);/* Discard header line */
+      std::getline(in, header);/* Discard header line */
       std::vector<double> visc_vec;
       std::array< std::vector<double>, 1 > depth_table;
       while (!in.eof())

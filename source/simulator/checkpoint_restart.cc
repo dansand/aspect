@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -160,7 +160,11 @@ namespace aspect
       parallel::distributed::SolutionTransfer<dim, LinearAlgebra::BlockVector>
       system_trans (dof_handler);
 
+#if DEAL_II_VERSION_GTE(9,1,0)
+      system_trans.prepare_for_serialization (x_system);
+#else
       system_trans.prepare_serialization (x_system);
+#endif
 
       // If we are using a free surface, also serialize the mesh vertices vector, which
       // uses its own dof handler
@@ -168,12 +172,17 @@ namespace aspect
       std::unique_ptr<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector> > freesurface_trans;
       if (parameters.free_surface_enabled)
         {
-          freesurface_trans.reset (new parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>
-                                   (free_surface->free_surface_dof_handler));
+          freesurface_trans
+            = std_cxx14::make_unique<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>>
+              (free_surface->free_surface_dof_handler);
 
           x_fs_system[0] = &free_surface->mesh_displacements;
 
+#if DEAL_II_VERSION_GTE(9,1,0)
+          freesurface_trans->prepare_for_serialization(x_fs_system);
+#else
           freesurface_trans->prepare_serialization(x_fs_system);
+#endif
         }
 
       signals.pre_checkpoint_store_user_data(triangulation);

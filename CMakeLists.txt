@@ -1,4 +1,4 @@
-# Copyright (C) 2013 - 2018 by the authors of the ASPECT code.
+# Copyright (C) 2013 - 2019 by the authors of the ASPECT code.
 #
 # This file is part of ASPECT.
 #
@@ -16,6 +16,7 @@
 # along with ASPECT; see the file doc/COPYING.  If not see
 # <http://www.gnu.org/licenses/>.
 
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 
 MESSAGE(STATUS "====================================================")
 MESSAGE(STATUS "============ Configuring ASPECT ====================")
@@ -25,15 +26,15 @@ MESSAGE(STATUS "====================================================")
 SET(TARGET "aspect")
 
 FILE(GLOB_RECURSE TARGET_SRC  "source/*.cc" "unit_tests/*.cc" "include/*.h" "contrib/catch/catch.hpp")
-INCLUDE_DIRECTORIES(include ${CMAKE_BINARY_DIR}/include contrib/catch)
+INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/include include  contrib/catch)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.8)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 LIST(APPEND CMAKE_MODULE_PATH
   ${CMAKE_SOURCE_DIR}
   )
 
-FIND_PACKAGE(deal.II 8.5.0 QUIET
+FIND_PACKAGE(deal.II 9.0.0 QUIET
   HINTS ${deal.II_DIR} ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
 IF(NOT ${deal.II_FOUND})
@@ -87,7 +88,7 @@ IF (NOT _DEALII_GOOD)
 ENDIF()
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
-PROJECT(${TARGET})
+PROJECT(${TARGET} CXX)
 
 IF (ASPECT_USE_PETSC)
 FOREACH(_source_file ${TARGET_SRC})
@@ -263,6 +264,72 @@ ADD_CUSTOM_TARGET(indent
   COMMENT "Indenting all ASPECT header and source files..."
   )
 
+IF(CMAKE_GENERATOR MATCHES "Ninja")
+  SET(_make_command "$ ninja")
+ELSE()
+  SET(_make_command " $ make")
+ENDIF()
+
+# Provide "release" and "debug" targets to switch compile mode
+IF(${DEAL_II_BUILD_TYPE} MATCHES "DebugRelease")
+ADD_CUSTOM_TARGET(release
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_BUILD_TYPE=Release .
+  COMMAND ${CMAKE_COMMAND} -E echo "***"
+  COMMAND ${CMAKE_COMMAND} -E echo "*** Switched to Release mode. Now recompile with: ${_make_command}"
+  COMMAND ${CMAKE_COMMAND} -E echo "***"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  VERBATIM
+  COMMENT "switching to RELEASE mode..."
+  )
+ADD_CUSTOM_TARGET(debug
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_BUILD_TYPE=Debug .
+  COMMAND ${CMAKE_COMMAND} -E echo "***"
+  COMMAND ${CMAKE_COMMAND} -E echo "*** Switched to Debug mode. Now recompile with: ${_make_command}"
+  COMMAND ${CMAKE_COMMAND} -E echo "***"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  VERBATIM
+  COMMENT "switching to DEBUG mode..."
+  )
+ENDIF()
+
+# Provide a "distclean" target (like it is done in deal.II):
+ADD_CUSTOM_TARGET(distclean
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
+  COMMAND ${CMAKE_COMMAND} -E remove_directory CMakeFiles
+  COMMAND ${CMAKE_COMMAND} -E remove
+    CMakeCache.txt cmake_install.cmake Makefile
+    build.ninja rules.ninja .ninja_deps .ninja_log
+  COMMENT "distclean invoked"
+  )
+
+
+
+FILE(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/print_usage.cmake
+"MESSAGE(
+\"###
+#
+#  Project ${TARGET} set up with  ${DEAL_II_PACKAGE_NAME}-${DEAL_II_PACKAGE_VERSION}  found at
+#      ${DEAL_II_PATH}
+#
+#  CMAKE_BUILD_TYPE:          ${CMAKE_BUILD_TYPE}
+#
+#  You can now run
+#      ${_make_command}                - to compile and link ${TARGET}
+#      ${_make_command} debug          - to switch the build type to 'Debug'
+#      ${_make_command} release        - to switch the build type to 'Release'
+#      ${_make_command} clean          - to remove the generated executable as well as
+#                               all intermediate compilation files
+#      ${_make_command} distclean      - to clean the directory from all generated
+#                               files (includes clean, runclean and the removal
+#                               of the generated build system)
+#      ${_make_command} info           - to view this message again
+\")")
+
+# Provide "info" target
+ADD_CUSTOM_TARGET(info
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/print_usage.cmake
+  )
+
 
 # Depending on whether we link statically or allow for shared libs,
 # we can or can not load plugins via external shared libs. Pass this
@@ -311,8 +378,8 @@ ENDIF()
 # See whether we can verify that every plugin we load is compiled against
 # the same deal.II library
 SET(ASPECT_HAVE_LINK_H ON CACHE BOOL "If ON, link.h exists and is usable.")
-INCLUDE (CheckIncludeFiles)
-CHECK_INCLUDE_FILES ("link.h" _HAVE_LINK_H)
+INCLUDE (CheckIncludeFileCXX)
+CHECK_INCLUDE_FILE_CXX ("link.h" _HAVE_LINK_H)
 IF (NOT _HAVE_LINK_H)
   SET(ASPECT_HAVE_LINK_H OFF CACHE BOOL "" FORCE)
 ENDIF()
@@ -326,15 +393,20 @@ ENDIF()
 
 # Check if we want to use cotire to precompile header files and prepare a
 # unity build target. This speeds up compile time, but can fail on some
-# machines, therefore it is disabled by default.
-SET(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "Precompile external header files using cotire to speedup compile time.")
-
+# machines, therefore it is disabled by default. Also cotire currently
+# has issues with cmake generator expressions used in deal.II for cmake
+# version 3.9 and above. Disable cotire for cmake >= 3.9.
+SET(ASPECT_PRECOMPILE_HEADERS OFF CACHE BOOL "Precompile external header files using cotire to speedup compile time. Currently only supported for cmake versions older than 3.9.")
 IF (ASPECT_PRECOMPILE_HEADERS)
-# For the unity build we need to compile helper_functions.cc before core.cc
-# ensure this by reordering the files
-  FIND_FILE(HELPER_PATH helper_functions.cc HINTS "${CMAKE_SOURCE_DIR}/source/simulator")
-  LIST(REMOVE_ITEM TARGET_SRC ${HELPER_PATH})
-  LIST(INSERT TARGET_SRC 0 ${HELPER_PATH})
+  IF(CMAKE_VERSION VERSION_LESS 3.9)
+    # For the unity build we need to compile helper_functions.cc before core.cc
+    # ensure this by reordering the files
+    FIND_FILE(HELPER_PATH helper_functions.cc HINTS "${CMAKE_SOURCE_DIR}/source/simulator")
+    LIST(REMOVE_ITEM TARGET_SRC ${HELPER_PATH})
+    LIST(INSERT TARGET_SRC 0 ${HELPER_PATH})
+  ELSE()
+    MESSAGE(FATAL_ERROR "ASPECT_PRECOMPILE_HEADERS is currently only supported for CMake version 3.8 or less.")
+  ENDIF()
 ENDIF()
 
 # Check whether we can find the WorldBuilder and enable it.
@@ -364,7 +436,8 @@ IF (ASPECT_WITH_WORLD_BUILDER)
   ENDFOREACH()
 ENDIF()
 
-DEAL_II_INVOKE_AUTOPILOT()
+ADD_EXECUTABLE(${TARGET} ${TARGET_SRC})
+DEAL_II_SETUP_TARGET(${TARGET})
 
 FIND_PACKAGE(PerpleX QUIET HINTS ./contrib/perplex/install/ ../ ../../ $ENV{PERPLEX_DIR})
 IF(${PerpleX_FOUND})
@@ -495,3 +568,11 @@ INSTALL(FILES ${CMAKE_BINARY_DIR}/include/aspect/revision.h DESTINATION "include
 
 MESSAGE(STATUS "Writing config into detailed.log...")
 INCLUDE(cmake/write_config)
+
+# print "info" if run for the first time:
+IF(NOT USAGE_PRINTED)
+  INCLUDE(${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/print_usage.cmake)
+  SET(USAGE_PRINTED TRUE CACHE INTERNAL "")
+ELSE()
+  MESSAGE(STATUS "Run  ${_make_command} info  to print a detailed help message")
+ENDIF()

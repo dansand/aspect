@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016 - 2017 by the authors of the ASPECT code.
+  Copyright (C) 2016 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -66,7 +66,7 @@ namespace aspect
          * @copydoc aspect::InitialTopographyModel::Interface::value()
          */
         double
-        value (const Point<dim-1> &p) const;
+        value (const Point<dim-1> &surface_point) const;
 
         /**
          * Return the maximum value of the elevation.

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -23,6 +23,7 @@
 #include <aspect/global.h>
 #include <aspect/utilities.h>
 #include <aspect/melt.h>
+#include <aspect/volume_of_fluid/handler.h>
 #include <aspect/newton.h>
 #include <aspect/free_surface.h>
 #include <aspect/citation_info.h>
@@ -155,6 +156,9 @@ namespace aspect
     post_signal_creation(
       std::bind (&internals::SimulatorSignals::call_connector_functions<dim>,
                  std::ref(signals))),
+    volume_of_fluid_handler (parameters.volume_of_fluid_tracking_enabled ?
+                             std_cxx14::make_unique<VolumeOfFluidHandler<dim>> (*this, prm) :
+                             nullptr),
     introspection (construct_variables<dim>(parameters, signals, melt_handler), parameters),
     mpi_communicator (Utilities::MPI::duplicate_communicator (mpi_communicator_)),
     iostream_tee_device(std::cout, log_file_stream),
@@ -366,6 +370,13 @@ namespace aspect
     mesh_refinement_manager.initialize_simulator (*this);
     mesh_refinement_manager.parse_parameters (prm);
 
+    // VoF Must be initialized after mesh_refinement_manager, due to needing to check
+    // for a mesh refinement strategy
+    if (parameters.volume_of_fluid_tracking_enabled)
+      {
+        volume_of_fluid_handler->initialize (prm);
+      }
+
     termination_manager.initialize_simulator (*this);
     termination_manager.parse_parameters (prm);
 
@@ -475,42 +486,13 @@ namespace aspect
     // object (set from the output_statistics() function)
     output_statistics_thread.join();
 
-    // Detect if we are being destroyed because an uncaught exception has
-    // been triggered. If so, reset() the TimerOutput class. This will clear
-    // the currently active timing sections. Otherwise, its destructor will try to
-    // do MPI communication when leaving the open sections, which can cause one of the
-    // following problems:
-    // 1. deadlocks or hangs in the MPI commands synchronizing the timers.
-    // 2. Incorrect error reporting about mismatched Trilinos compress() calls.
-    //
-    // In either case this might not show the real message of the exception
-    // that was being triggered.
-    //
-    // There are a number of obstacles to detecting whether the system is
-    // currently doing stack unwinding, as illustrated by a number of GotW
-    // (Gotcha of the Week) entries. Fortunately, they do not apply to the
-    // current class because class Simulator is not likely going to be used
-    // as a local variable in the destructor of another class. Consequently,
-    // if we get here and an exception is active, we can be pretty sure
-    // that the stack is being unwound *because of something that happened
-    // in a member function of the current class*.
-    //
-    // So the remaining question is then simply how we can determine that
-    // the stack is being unwound. C++ used to have a function
-    // std::uncaught_exception(), but it was deprecated in C++17 in favor
-    // of the new function std::uncaught_exceptions(). To make things more
-    // awkward, some compilers started to emit deprecation notes if they
-    // support C++17 (and the corresponding flag is switched on by deal.II)
-    // even though here in ASPECT we do not yet rely on C++17 support. So
-    // we have to conditionally use one or the other to avoid that we
-    // either (i) get a warning about using a deprecated function, or
-    // (ii) get an error about calling an undeclared function.
-#if __cplusplus >= 201703L
-    if (std::uncaught_exceptions())
-#else
-    if (std::uncaught_exception())
-#endif
-      computing_timer.reset();
+    // If an exception is being thrown (for example due to AssertThrow()), we
+    // might end up here with currently active timing sections. The destructor
+    // of TimerOutput does MPI communication, which can lead to deadlocks,
+    // hangs, or confusing MPI error messages. To avoid this, we can call
+    // reset() to remove all open sections. In a normal run, we won't have any
+    // active sessions, so this won't hurt to do:
+    computing_timer.reset();
   }
 
 
@@ -647,6 +629,8 @@ namespace aspect
     // constraints. Of course we need to force assembly too.
     if (rebuild_sparsity_and_matrices)
       {
+        TimerOutput::Scope timer (computing_timer, "Setup matrices");
+
         rebuild_sparsity_and_matrices = false;
         setup_system_matrix (introspection.index_sets.system_partitioning);
         setup_system_preconditioner (introspection.index_sets.system_partitioning);
@@ -669,10 +653,8 @@ namespace aspect
     // that end up in the bilinear form. we update those that end up in
     // the constraints object when calling compute_current_constraints()
     // above
-    for (typename std::map<types::boundary_id,std::shared_ptr<BoundaryTraction::Interface<dim> > >::iterator
-         p = boundary_traction.begin();
-         p != boundary_traction.end(); ++p)
-      p->second->update ();
+    for (auto &p : boundary_traction)
+      p.second->update ();
   }
 
 
@@ -841,6 +823,18 @@ namespace aspect
 
 #if DEAL_II_VERSION_GTE(9,0,0)
     current_constraints.copy_from(new_current_constraints);
+
+#ifdef DEBUG
+    IndexSet locally_active_dofs;
+    DoFTools::extract_locally_active_dofs(dof_handler, locally_active_dofs);
+    Assert(current_constraints.is_consistent_in_parallel(
+             dof_handler.locally_owned_dofs_per_processor(),
+             locally_active_dofs,
+             mpi_communicator,
+             false /*verbose=false*/),
+           ExcMessage("Inconsistent Constraints detected!"));
+#endif
+
 #else
     current_constraints.clear ();
     current_constraints.reinit (introspection.index_sets.system_relevant_set);
@@ -931,6 +925,15 @@ namespace aspect
       // needed.  All other matrix blocks are left empty here.
       if (have_fem_compositional_field)
         coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
+
+      // If we are using VolumeOfFluid interface tracking, create a matrix block in the
+      // field corresponding to the volume fraction.
+      if (parameters.volume_of_fluid_tracking_enabled)
+        {
+          const unsigned int volume_of_fluid_block = volume_of_fluid_handler->field_struct_for_field_index(0)
+                                                     .volume_fraction.first_component_index;
+          coupling[volume_of_fluid_block][volume_of_fluid_block] = DoFTools::always;
+        }
     }
 
     LinearAlgebra::BlockDynamicSparsityPattern sp;
@@ -943,7 +946,9 @@ namespace aspect
                mpi_communicator);
 #endif
 
-    if ((parameters.use_discontinuous_temperature_discretization) || (parameters.use_discontinuous_composition_discretization))
+    if ((parameters.use_discontinuous_temperature_discretization) ||
+        (parameters.use_discontinuous_composition_discretization) ||
+        (parameters.volume_of_fluid_tracking_enabled))
       {
         Table<2,DoFTools::Coupling> face_coupling (introspection.n_components,
                                                    introspection.n_components);
@@ -957,6 +962,13 @@ namespace aspect
         // Only allocate composition 0 matrix if needed. Same as the non-DG case (see above)
         if (parameters.use_discontinuous_composition_discretization && have_fem_compositional_field)
           face_coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
+
+        if (parameters.volume_of_fluid_tracking_enabled)
+          {
+            const unsigned int volume_of_fluid_block = volume_of_fluid_handler->field_struct_for_field_index(0)
+                                                       .volume_fraction.first_component_index;
+            face_coupling[volume_of_fluid_block][volume_of_fluid_block] = DoFTools::always;
+          }
 
         DoFTools::make_flux_sparsity_pattern (dof_handler,
                                               sp,
@@ -1183,7 +1195,7 @@ namespace aspect
                       // we must be in 3d, or 'z' should never have gotten through
                       Assert (dim==3, ExcInternalError());
                       if (dim==3)
-                        mask[introspection.component_indices.velocities[2]] = true;
+                        mask[introspection.component_indices.velocities[dim-1]] = true;
                       break;
                     default:
                       Assert (false, ExcInternalError());
@@ -1250,7 +1262,12 @@ namespace aspect
       // is kept here, even though explicitly setting a facet should always work.
       try
         {
-          pcout.get_stream().imbue(std::locale(std::locale(), new aspect::Utilities::ThousandSep));
+          // Imbue the stream with a locale that does the right thing. The
+          // locale is responsible for later deleting the object pointed
+          // to by the last argument (the "facet"), see
+          // https://en.cppreference.com/w/cpp/locale/locale/locale
+          pcout.get_stream().imbue(std::locale(std::locale(),
+                                               new aspect::Utilities::ThousandSep));
         }
       catch (const std::runtime_error &e)
         {
@@ -1283,14 +1300,14 @@ namespace aspect
       free_surface->setup_dofs();
 
 
-    // reinit the constraints matrix and make hanging node constraints
+    // Reconstruct the constraint-matrix:
     constraints.clear();
     constraints.reinit(introspection.index_sets.system_relevant_set);
 
-    DoFTools::make_hanging_node_constraints (dof_handler,
-                                             constraints);
+    // Set up the constraints for periodic boundary conditions:
 
-    // Now set up the constraints for periodic boundary conditions
+    // Note: this has to happen _before_ we do hanging node constraints,
+    // because inconsistent contraints could be generated in parallel otherwise.
     {
       typedef std::set< std::pair< std::pair< types::boundary_id, types::boundary_id>, unsigned int> >
       periodic_boundary_set;
@@ -1304,9 +1321,11 @@ namespace aspect
                                                  (*p).second,       // cartesian direction for translational symmetry
                                                  constraints);
         }
-
-
     }
+
+    //  Make hanging node constraints:
+    DoFTools::make_hanging_node_constraints (dof_handler,
+                                             constraints);
 
 
     compute_initial_velocity_boundary_constraints(constraints);
@@ -1519,8 +1538,9 @@ namespace aspect
       if (parameters.free_surface_enabled)
         {
           x_fs_system[0] = &free_surface->mesh_displacements;
-          freesurface_trans.reset (new parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>
-                                   (free_surface->free_surface_dof_handler));
+          freesurface_trans
+            = std_cxx14::make_unique<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>>
+              (free_surface->free_surface_dof_handler);
         }
 
 

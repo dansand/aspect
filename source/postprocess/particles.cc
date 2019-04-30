@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2017 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
  This file is part of ASPECT.
 
@@ -188,8 +188,9 @@ namespace aspect
 
 #if DEAL_II_VERSION_GTE(9,0,0)
     template <int dim>
-    void Particles<dim>::writer (const std::string filename,
-                                 const std::string temporary_output_location,
+    // We need to pass the arguments by value, as this function can be called on a separate thread:
+    void Particles<dim>::writer (const std::string filename, //NOLINT(performance-unnecessary-value-param)
+                                 const std::string temporary_output_location, //NOLINT(performance-unnecessary-value-param)
                                  const std::string *file_contents)
     {
       std::string tmp_filename = filename;
@@ -199,11 +200,10 @@ namespace aspect
 
           // Create the temporary file; get at the actual filename
           // by using a C-style string that mkstemp will then overwrite
-          char *tmp_filename_x = new char[tmp_filename.size()+1];
-          std::strcpy(tmp_filename_x, tmp_filename.c_str());
-          int tmp_file_desc = mkstemp(tmp_filename_x);
-          tmp_filename = tmp_filename_x;
-          delete []tmp_filename_x;
+          std::vector<char> tmp_filename_x (tmp_filename.size()+1);
+          std::strcpy(tmp_filename_x.data(), tmp_filename.c_str());
+          const int tmp_file_desc = mkstemp(tmp_filename_x.data());
+          tmp_filename = tmp_filename_x.data();
 
           // If we failed to create the temp file, just write directly to the target file.
           // We also provide a warning about this fact. There are places where
@@ -726,7 +726,7 @@ namespace aspect
               // null pointer. System is guaranteed to return non-zero if it finds
               // a terminal and zero if there is none (like on the compute nodes of
               // some cluster architectures, e.g. IBM BlueGene/Q)
-              AssertThrow(system((char *)0) != 0,
+              AssertThrow(system((char *)nullptr) != 0,
                           ExcMessage("Usage of a temporary storage location is only supported if "
                                      "there is a terminal available to move the files to their final location "
                                      "after writing. The system() command did not succeed in finding such a terminal."));
