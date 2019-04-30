@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -547,13 +547,13 @@ namespace aspect
               const double u_theta = spherical_vector[2];
 
               cartesian_vector[0] = std::cos(phi)*std::sin(theta)*u_r
-                                    - std::sin(phi)*u_phi
-                                    + std::cos(phi)*std::cos(theta)*u_theta; // X
+                                    - std::sin(phi)*u_theta
+                                    - std::cos(phi)*std::cos(theta)*u_phi; // X
               cartesian_vector[1] = std::sin(phi)*std::sin(theta)*u_r
-                                    + std::cos(phi)*u_phi
-                                    + std::sin(phi)*std::cos(theta)*u_theta; // Y
+                                    + std::cos(phi)*u_theta
+                                    - std::sin(phi)*std::cos(theta)*u_phi; // Y
               cartesian_vector[2] = std::cos(theta)*u_r
-                                    - std::sin(theta)*u_theta; // Z
+                                    + std::sin(theta)*u_phi;                 // Z
               break;
             }
 
@@ -1549,7 +1549,7 @@ namespace aspect
       while (in.peek() == '#')
         {
           std::string line;
-          std::getline(in,line);
+          getline(in,line);
           std::stringstream linestream(line);
           std::string word;
           while (linestream >> word)
@@ -1610,9 +1610,9 @@ namespace aspect
                 AssertThrow (components == name_column_index,
                              ExcMessage("The number of expected data columns and the "
                                         "list of column names at the beginning of the data file "
-                                        + filename + " do not match. The file should contain "
+                                        + filename + " does not match. The file should contain "
                                         "one column name per column (one for each dimension "
-                                        "and one per data column)."));
+                                        "and one per data column."));
 
               break;
             }
@@ -1885,12 +1885,12 @@ namespace aspect
       for (const auto &boundary_id : boundary_ids)
         {
           lookups.insert(std::make_pair(boundary_id,
-                                        std_cxx14::make_unique<Utilities::AsciiDataLookup<dim-1>>
+                                        std::make_shared<Utilities::AsciiDataLookup<dim-1>>
                                         (components,
                                          this->scale_factor)));
 
           old_lookups.insert(std::make_pair(boundary_id,
-                                            std_cxx14::make_unique<Utilities::AsciiDataLookup<dim-1>>
+                                            std::make_shared<Utilities::AsciiDataLookup<dim-1>>
                                             (components,
                                              this->scale_factor)));
 
@@ -2109,8 +2109,11 @@ namespace aspect
 
               const bool load_both_files = std::abs(current_file_number - old_file_number) >= 1;
 
-              for (const auto &boundary_id : lookups)
-                update_data(boundary_id.first, load_both_files);
+              for (typename std::map<types::boundary_id,
+                   std::shared_ptr<Utilities::AsciiDataLookup<dim-1> > >::iterator
+                   boundary_id = lookups.begin();
+                   boundary_id != lookups.end(); ++boundary_id)
+                update_data(boundary_id->first,load_both_files);
             }
 
           time_weight = time_steps_since_start
@@ -2317,8 +2320,8 @@ namespace aspect
                    ExcMessage ("This ascii data plugin can only be used when using "
                                "a spherical shell, chunk or box geometry."));
 
-      lookup = std_cxx14::make_unique<Utilities::AsciiDataLookup<dim>> (components,
-                                                                        this->scale_factor);
+      lookup = std::make_shared<Utilities::AsciiDataLookup<dim>> (components,
+                                                                  this->scale_factor);
 
       const std::string filename = this->data_directory + this->data_file_name;
 
