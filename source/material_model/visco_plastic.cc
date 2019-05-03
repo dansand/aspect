@@ -625,7 +625,7 @@ namespace aspect
                     break;
                 }
               out.reaction_terms[i][c] = delta_C;
-
+            }
           // If strain weakening is used, overwrite the first reaction term,
           // which represents the second invariant of the (plastic) strain tensor.
           // If plastic strain is tracked (so not the total strain), only overwrite
