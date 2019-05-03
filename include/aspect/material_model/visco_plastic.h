@@ -165,6 +165,7 @@ namespace aspect
         double min_visc;
         double max_visc;
         double ref_visc;
+        double reaction_depth;
 
         double grain_size;
 
