@@ -608,10 +608,6 @@ namespace aspect
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
           const double depth = this->get_geometry_model().depth(in.position[i]);
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
-            out.reaction_terms[i][c] = 0.0;
-
-
-          //for (unsigned int c=0; c<this->n_compositional_fields(); ++c)
             {
               double delta_C = 0.0;
               switch (c)
