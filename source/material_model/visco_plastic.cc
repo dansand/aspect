@@ -546,6 +546,7 @@ namespace aspect
           out.specific_heat[i] = 0.0;
           double thermal_diffusivity = 0.0;
 
+
           const std::vector<double> volume_fractions = MaterialUtilities::compute_volume_fractions(in.composition[i], volumetric_compositions);
           for (unsigned int j=0; j < volume_fractions.size(); ++j)
             {
@@ -606,6 +607,7 @@ namespace aspect
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
+          const std::vector<double> &composition = in.composition[i];
           const double depth = this->get_geometry_model().depth(in.position[i]);
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
             {
