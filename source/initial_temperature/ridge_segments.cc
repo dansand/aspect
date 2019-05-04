@@ -103,6 +103,10 @@ namespace aspect
                              "of the plate cooling model temperature. Units: m/years if the "
                              "'Use years in output instead of seconds' parameter is set; "
                              "m/seconds otherwise.");
+          prm.declare_entry ("Age constant", "0.01",
+                             Patterns::Double (0),
+                             "yada"
+                             "yada ");
           prm.declare_entry ("Maximum oceanic plate thickness", "125000.0",
                              Patterns::Double (0),
                              "The maximum thickness of an oceanic plate in the plate cooling model "
@@ -135,6 +139,7 @@ namespace aspect
         prm.enter_subsection("Plate cooling");
         {
           spreading_velocity = prm.get_double ("Spreading velocity");
+          age_constant = prm.get_double ("Age constant");
           max_plate_thickness = prm.get_double ("Maximum oceanic plate thickness");
           Tm = prm.get_double ("Maximum oceanic plate temperature");
           Ts = prm.get_double ("Surface temperature");

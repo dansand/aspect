@@ -98,6 +98,9 @@ namespace aspect
          */
         double spreading_velocity;
 
+
+        double age_constant;
+
         /**
          * The constant thickness of the oceanic crust
          */

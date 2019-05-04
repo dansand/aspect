@@ -87,6 +87,8 @@ namespace aspect
          */
         double spreading_velocity;
 
+
+        double age_constant;
         /**
          * The maximum thickness and temperature of an oceanic plate
          * when time goes to infinity
