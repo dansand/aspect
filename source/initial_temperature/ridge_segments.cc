@@ -43,7 +43,10 @@ namespace aspect
 
       // If necessary, convert the spreading velocity from m/yr to m/s.
       if (this->convert_output_to_years())
-        spreading_velocity /= year_in_seconds;
+        {
+          spreading_velocity /= year_in_seconds;
+          age_constant /= year_in_seconds;
+        }
     }
 
     template <int dim>
@@ -70,6 +73,9 @@ namespace aspect
 
       // Determine plate age based on distance to the ridge and half the spreading velocity
       const double plate_age = 0.5 * distance_to_ridge / spreading_velocity;
+      plate_age += age_constant
+
+
 
       // The parameters needed for the plate cooling temperature calculation
       // See for example page 139 of Schubert, Turcotte and Olson - Mantle convection in the Earth and planets
