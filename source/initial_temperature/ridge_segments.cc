@@ -72,8 +72,7 @@ namespace aspect
       const double depth = this->get_geometry_model().depth(position);
 
       // Determine plate age based on distance to the ridge and half the spreading velocity
-      const double plate_age = 0.5 * distance_to_ridge / spreading_velocity;
-      plate_age += age_constant
+      const double plate_age = age_constant + 0.5 * distance_to_ridge / spreading_velocity;
 
 
 
