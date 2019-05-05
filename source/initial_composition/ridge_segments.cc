@@ -187,6 +187,7 @@ namespace aspect
         {
           spreading_velocity = prm.get_double ("Spreading velocity");
           max_plate_thickness = prm.get_double ("Maximum oceanic plate thickness");
+          age_constant = prm.get_double ("Age constant");
           Tm = prm.get_double ("Maximum oceanic plate temperature");
           Ts = prm.get_double ("Surface temperature");
         }
