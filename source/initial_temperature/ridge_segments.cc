@@ -45,7 +45,7 @@ namespace aspect
       if (this->convert_output_to_years())
         {
           spreading_velocity /= year_in_seconds;
-          age_constant /= year_in_seconds;
+          age_constant *= year_in_seconds;
         }
     }
 
