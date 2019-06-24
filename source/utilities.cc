@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -543,13 +543,13 @@ namespace aspect
               const double u_theta = spherical_vector[2];
 
               cartesian_vector[0] = std::cos(phi)*std::sin(theta)*u_r
-                                    - std::sin(phi)*u_theta
-                                    - std::cos(phi)*std::cos(theta)*u_phi; // X
+                                    - std::sin(phi)*u_phi
+                                    + std::cos(phi)*std::cos(theta)*u_theta; // X
               cartesian_vector[1] = std::sin(phi)*std::sin(theta)*u_r
-                                    + std::cos(phi)*u_theta
-                                    - std::sin(phi)*std::cos(theta)*u_phi; // Y
+                                    + std::cos(phi)*u_phi
+                                    + std::sin(phi)*std::cos(theta)*u_theta; // Y
               cartesian_vector[2] = std::cos(theta)*u_r
-                                    + std::sin(theta)*u_phi;                 // Z
+                                    - std::sin(theta)*u_theta; // Z
               break;
             }
 
@@ -718,37 +718,16 @@ namespace aspect
 
       for (unsigned int i = 0; i < n_poly_points; ++i)
         {
-          // Create vector along the polygon line segment
-          Tensor<1,2> vector_segment = shifted_point_list[i] - point_list[i];
-          // Create vector from point to the second segment point
-          Tensor<1,2> vector_point_segment = point - point_list[i];
-
-          // Compute dot products to get angles
-          const double c1 = vector_point_segment * vector_segment;
-          const double c2 = vector_segment * vector_segment;
-
-          // point lies closer to not-shifted polygon point, but perpendicular base line lies outside segment
-          if (c1 <= 0.0)
-            distances[i] = (Tensor<1,2> (point_list[i] - point)).norm();
-          // point lies closer to shifted polygon point, but perpendicular base line lies outside segment
-          else if (c2 <= c1)
-            distances[i] = (Tensor<1,2> (shifted_point_list[i] - point)).norm();
-          // perpendicular base line lies on segment
-          else
-            {
-              const Point<2> point_on_segment = point_list[i] + (c1/c2) * vector_segment;
-              distances[i] = (Tensor<1,2> (point - point_on_segment)).norm();
-            }
+          const std::array<Point<2>,2 > list = {{point_list[i], shifted_point_list[i]}};
+          distances[i] = distance_to_line(list, point);
         }
 
       // Return the minimum of the distances of the point to all polygon segments
       return *std::min_element(distances.begin(),distances.end()) * sign;
     }
 
-
-    template <int dim>
     double
-    distance_to_line(const std::vector<dealii::Point<2> > &point_list,
+    distance_to_line(const std::array<dealii::Point<2>,2 > &point_list,
                      const dealii::Point<2> &point)
     {
 
@@ -769,32 +748,30 @@ namespace aspect
       AssertThrow(n_poly_points == 2, ExcMessage("A list of points for a line segment should consist of 2 points."));
 
       // Create vector along the polygon line segment P0 to P1
-      Tensor<1,2> vector_segment = point_list[1] - point_list[0];
+      const Tensor<1,2> vector_segment = point_list[1] - point_list[0];
       // Create vector from point P to the second segment point
-      Tensor<1,2> vector_point_segment = point - point_list[0];
+      const Tensor<1,2> vector_point_segment = point - point_list[0];
 
       // Compute dot products to get angles
       const double c1 = vector_point_segment * vector_segment;
 
       // Point P's perpendicular base line lies outside segment, before P0.
-      // Return an insane distance.
-      if (c1 < 0.0)
-        return 1e23;
+      // Return distance between points P and P0.
+      if (c1 <= 0.0)
+        return (Tensor<1,2> (point_list[0] - point)).norm();
 
       const double c2 = vector_segment * vector_segment;
 
       // Point P's perpendicular base line lies outside segment, after P1.
-      // Return an insane distance.
-      if (c2 < c1)
-        return 1e23;
+      // Return distance between points P and P1.
+      if (c2 <= c1)
+        return (Tensor<1,2> (point_list[1] - point)).norm();
 
       // Point P's perpendicular base line lies on the line segment.
       // Return distance between point P and the base point.
       const Point<2> point_on_segment = point_list[0] + (c1/c2) * vector_segment;
       return (Tensor<1,2> (point - point_on_segment)).norm();
     }
-
-
 
     template <int dim>
     std::array<Tensor<1,dim>,dim-1>
@@ -1545,7 +1522,7 @@ namespace aspect
       while (in.peek() == '#')
         {
           std::string line;
-          getline(in,line);
+          std::getline(in,line);
           std::stringstream linestream(line);
           std::string word;
           while (linestream >> word)
@@ -1606,9 +1583,9 @@ namespace aspect
                 AssertThrow (components == name_column_index,
                              ExcMessage("The number of expected data columns and the "
                                         "list of column names at the beginning of the data file "
-                                        + filename + " does not match. The file should contain "
+                                        + filename + " do not match. The file should contain "
                                         "one column name per column (one for each dimension "
-                                        "and one per data column."));
+                                        "and one per data column)."));
 
               break;
             }
@@ -1882,12 +1859,12 @@ namespace aspect
       for (const auto &boundary_id : boundary_ids)
         {
           lookups.insert(std::make_pair(boundary_id,
-                                        std::make_shared<Utilities::AsciiDataLookup<dim-1>>
+                                        std_cxx14::make_unique<Utilities::AsciiDataLookup<dim-1>>
                                         (components,
                                          this->scale_factor)));
 
           old_lookups.insert(std::make_pair(boundary_id,
-                                            std::make_shared<Utilities::AsciiDataLookup<dim-1>>
+                                            std_cxx14::make_unique<Utilities::AsciiDataLookup<dim-1>>
                                             (components,
                                              this->scale_factor)));
 
@@ -2106,11 +2083,8 @@ namespace aspect
 
               const bool load_both_files = std::abs(current_file_number - old_file_number) >= 1;
 
-              for (typename std::map<types::boundary_id,
-                   std::shared_ptr<Utilities::AsciiDataLookup<dim-1> > >::iterator
-                   boundary_id = lookups.begin();
-                   boundary_id != lookups.end(); ++boundary_id)
-                update_data(boundary_id->first,load_both_files);
+              for (const auto &boundary_id : lookups)
+                update_data(boundary_id.first, load_both_files);
             }
 
           time_weight = time_steps_since_start
@@ -2487,8 +2461,8 @@ namespace aspect
                    ExcMessage ("This ascii data plugin can only be used when using "
                                "a spherical shell, chunk, or box geometry."));
 
-      lookup = std::make_shared<Utilities::AsciiDataLookup<dim>> (components,
-                                                                  this->scale_factor);
+      lookup = std_cxx14::make_unique<Utilities::AsciiDataLookup<dim>> (components,
+                                                                        this->scale_factor);
 
       const std::string filename = this->data_directory + this->data_file_name;
 
@@ -3213,8 +3187,6 @@ namespace aspect
     template double signed_distance_to_polygon<2>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
     template double signed_distance_to_polygon<3>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
 
-    template double distance_to_line<2>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
-    template double distance_to_line<3>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
 
     template std::array<Tensor<1,2>,1> orthogonal_vectors (const Tensor<1,2> &v);
     template std::array<Tensor<1,3>,2> orthogonal_vectors (const Tensor<1,3> &v);

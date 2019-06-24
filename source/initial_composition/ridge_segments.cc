@@ -211,7 +211,8 @@ namespace aspect
             {
               // In 3d a line segment consists of 2 points,
               // in 2d only 1 (ridge axis orthogonal two x and y)
-              point_list[i_segment].resize(dim-1);
+              //I now apply the dim-1 in the declaration of point_list in teh header file
+              //point_list[i_segment].resize(dim-1);
 
               const std::vector<std::string> temp_segment = Utilities::split_string_list(temp_segments[i_segment],'>');
 

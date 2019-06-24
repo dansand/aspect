@@ -131,7 +131,12 @@ namespace aspect
          * The list of line segments consisting of two 2D coordinates per segment.
          * The segments represent the rift axis.
          */
-        std::vector<std::vector<Point<2> > > point_list;
+        //std::vector<std::vector<Point<2> > > point_list;
+
+        //the outer container is still a vector.
+        // a point is always a 2d object.
+        //the dim-1 refers the the number of poins that make up a line segment
+        std::vector<std::array<Point<2>,dim-1 > > point_list;
 
     };
   }
