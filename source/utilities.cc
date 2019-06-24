@@ -30,12 +30,8 @@
 #include <deal.II/base/function_lib.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/signaling_nan.h>
-
-#if DEAL_II_VERSION_GTE(9,0,0)
 #include <deal.II/base/patterns.h>
-#else
-#include <deal.II/base/parameter_handler.h>
-#endif
+
 
 #include <aspect/geometry_model/box.h>
 #include <aspect/geometry_model/spherical_shell.h>
@@ -1770,6 +1766,7 @@ namespace aspect
     AsciiDataLookup<dim>::get_data(const Point<dim> &position,
                                    const unsigned int component) const
     {
+      Assert(component<components, ExcMessage("Invalid component index"));
       return data[component]->value(position);
     }
 
@@ -2179,9 +2176,12 @@ namespace aspect
       time_dependent = false;
       // Give warning if first processor
       this->get_pcout() << std::endl
-                        << "   Loading new data file did not succeed." << std::endl
-                        << "   Assuming constant boundary conditions for rest of model run."
-                        << std::endl << std::endl;
+                        << "   From this timestep onwards, ASPECT will not attempt to load new Ascii data files." << std::endl
+                        << "   This is either because ASPECT has already read all the files necessary to impose" << std::endl
+                        << "   the requested boundary condition, or that the last available file has been read." << std::endl
+                        << "   If the Ascii data represented a time-dependent boundary condition," << std::endl
+                        << "   that time-dependence ends at this timestep  (i.e. the boundary condition" << std::endl
+                        << "   will continue unchanged from the last known state into the future)." << std::endl << std::endl;
     }
 
     template <int dim>
@@ -2193,17 +2193,16 @@ namespace aspect
     {
       if (this->get_time() - first_data_file_model_time >= 0.0)
         {
-          Point<dim> internal_position = position;
+          const std::array<double,dim> natural_position = this->get_geometry_model().cartesian_to_natural_coordinates(position);
 
-          if (dynamic_cast<const GeometryModel::SphericalShell<dim>*> (&this->get_geometry_model()) != nullptr
-              || dynamic_cast<const GeometryModel::Chunk<dim>*> (&this->get_geometry_model()) != nullptr
-              || dynamic_cast<const GeometryModel::Sphere<dim>*> (&this->get_geometry_model()) != nullptr)
+          Point<dim> internal_position;
+          for (unsigned int i = 0; i < dim; i++)
+            internal_position[i] = natural_position[i];
+
+          // The chunk model has latitude as natural coordinate. We need to convert this to colatitude
+          if (dynamic_cast<const GeometryModel::Chunk<dim>*> (&this->get_geometry_model()) != nullptr && dim == 3)
             {
-              const std::array<double,dim> spherical_position =
-                Utilities::Coordinates::cartesian_to_spherical_coordinates(position);
-
-              for (unsigned int i = 0; i < dim; i++)
-                internal_position[i] = spherical_position[i];
+              internal_position[2] = numbers::PI/2. - internal_position[2];
             }
 
           const std::array<unsigned int,dim-1> boundary_dimensions =
@@ -2305,6 +2304,174 @@ namespace aspect
 
 
     template <int dim>
+    AsciiDataLayered<dim>::AsciiDataLayered ()
+    {}
+
+
+
+    template <int dim>
+    void
+    AsciiDataLayered<dim>::initialize(const unsigned int components)
+    {
+      AssertThrow ((Plugins::plugin_type_matches<GeometryModel::SphericalShell<dim> >(this->get_geometry_model()) ||
+                    Plugins::plugin_type_matches<GeometryModel::Chunk<dim> >(this->get_geometry_model()) ||
+                    Plugins::plugin_type_matches<GeometryModel::Sphere<dim> >(this->get_geometry_model()) ||
+                    Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model())),
+                   ExcMessage ("This ascii data plugin can only be used when using "
+                               "a spherical shell, chunk, sphere or box geometry."));
+
+      // Create the lookups for each file
+      number_of_layer_boundaries = data_file_names.size();
+      for (unsigned int i=0; i<number_of_layer_boundaries; ++i)
+        {
+          const std::string filename = data_directory + data_file_names[i];
+          AssertThrow(Utilities::fexists(filename),
+                      ExcMessage (std::string("Ascii data file <")
+                                  +
+                                  filename
+                                  +
+                                  "> not found!"));
+
+          lookups.push_back(std_cxx14::make_unique<Utilities::AsciiDataLookup<dim-1>> (components,
+                                                                                       this->scale_factor));
+          lookups[i]->load_file(filename,this->get_mpi_communicator());
+        }
+    }
+
+
+
+    template <int dim>
+    double
+    AsciiDataLayered<dim>::
+    get_data_component (const Point<dim> &position,
+                        const unsigned int component) const
+    {
+      // Get the location of the component in the coordinate system of the ascii data input
+      const std::array<double,dim> natural_position = this->get_geometry_model().cartesian_to_natural_coordinates(position);
+
+      Point<dim> internal_position;
+      for (unsigned int i = 0; i < dim; i++)
+        internal_position[i] = natural_position[i];
+
+      // The chunk model has latitude as natural coordinate. We need to convert this to colatitude
+      if (Plugins::plugin_type_matches<GeometryModel::Chunk<dim> >(this->get_geometry_model()) && dim == 3)
+        {
+          internal_position[2] = numbers::PI/2. - internal_position[2];
+        }
+
+      double vertical_position;
+      Point<dim-1> horizontal_position;
+      if (Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()))
+        {
+          // in cartesian coordinates, the vertical component comes last
+          vertical_position = internal_position[dim-1];
+          for (unsigned int i = 0; i < dim-1; i++)
+            horizontal_position[i] = internal_position[i];
+        }
+      else
+        {
+          // in spherical coordinates, the vertical component comes first
+          vertical_position = internal_position[0];
+          for (unsigned int i = 0; i < dim-1; i++)
+            horizontal_position[i] = internal_position[i+1];
+        }
+
+      // Find which layer we're in
+      unsigned int layer_boundary_index=0;
+      // if position < position of the first boundary layer, stop
+      double old_difference_in_vertical_position = vertical_position - lookups[layer_boundary_index]->get_data(horizontal_position,0);
+      double difference_in_vertical_position = old_difference_in_vertical_position;
+      while (difference_in_vertical_position > 0. && layer_boundary_index < number_of_layer_boundaries-1)
+        {
+          ++layer_boundary_index;
+          old_difference_in_vertical_position = difference_in_vertical_position;
+          difference_in_vertical_position = vertical_position - lookups[layer_boundary_index]->get_data(horizontal_position,0);
+        }
+
+      if (interpolation_scheme == "piecewise constant")
+        {
+          return lookups[layer_boundary_index]->get_data(horizontal_position,component); // takes value from layer above
+        }
+      else if (interpolation_scheme == "linear")
+        {
+          if (difference_in_vertical_position > 0 || layer_boundary_index == 0) // if the point is above the first layer or below the last
+            {
+              return lookups[layer_boundary_index]->get_data(horizontal_position,component);
+            }
+          else
+            {
+              const double f = difference_in_vertical_position/(difference_in_vertical_position-old_difference_in_vertical_position);
+              return ((1.-f)*lookups[layer_boundary_index]->get_data(horizontal_position,component) +
+                      f*lookups[layer_boundary_index-1]->get_data(horizontal_position,component));
+            }
+        }
+      return 0;
+    }
+
+
+    template <int dim>
+    void
+    AsciiDataLayered<dim>::declare_parameters (ParameterHandler  &prm,
+                                               const std::string &default_directory,
+                                               const std::string &default_filename,
+                                               const std::string &subsection_name)
+    {
+      Utilities::AsciiDataBase<dim>::declare_parameters(prm,
+                                                        default_directory,
+                                                        default_filename,
+                                                        subsection_name);
+
+      prm.enter_subsection (subsection_name);
+      {
+        prm.declare_entry ("Data directory",
+                           default_directory,
+                           Patterns::DirectoryName (),
+                           "The name of a directory that contains the model data. This path "
+                           "may either be absolute (if starting with a `/') or relative to "
+                           "the current directory. The path may also include the special "
+                           "text `$ASPECT_SOURCE_DIR' which will be interpreted as the path "
+                           "in which the ASPECT source files were located when ASPECT was "
+                           "compiled. This interpretation allows, for example, to reference "
+                           "files located in the `data/' subdirectory of ASPECT. ");
+
+        prm.declare_entry ("Data file names",
+                           default_filename,
+                           Patterns::List (Patterns::Anything()),
+                           "The file names of the model data (comma separated). ");
+
+        prm.declare_entry ("Interpolation scheme", "linear",
+                           Patterns::Selection("piecewise constant|linear"),
+                           "Method to interpolate between layer boundaries. Select from "
+                           "piecewise constant or linear. Piecewise constant takes the "
+                           "value from the nearest layer boundary above the data point. "
+                           "The linear option interpolates linearly between layer boundaries. "
+                           "Above and below the domain given by the layer boundaries, the values are"
+                           "given by the top and bottom layer boundary.");
+
+      }
+      prm.leave_subsection();
+    }
+
+
+    template <int dim>
+    void
+    AsciiDataLayered<dim>::parse_parameters (ParameterHandler &prm,
+                                             const std::string &subsection_name)
+    {
+      Utilities::AsciiDataBase<dim>::parse_parameters(prm, subsection_name);
+
+      prm.enter_subsection(subsection_name);
+      {
+        data_directory = Utilities::expand_ASPECT_SOURCE_DIR(prm.get ("Data directory"));
+        data_file_names = Utilities::split_string_list(prm.get ("Data file names"), ',');
+        interpolation_scheme = prm.get("Interpolation scheme");
+      }
+      prm.leave_subsection();
+    }
+
+
+
+    template <int dim>
     AsciiDataInitial<dim>::AsciiDataInitial ()
     {}
 
@@ -2318,7 +2485,7 @@ namespace aspect
                    || (dynamic_cast<const GeometryModel::Chunk<dim>*> (&this->get_geometry_model())) != nullptr
                    || (dynamic_cast<const GeometryModel::Box<dim>*> (&this->get_geometry_model())) != nullptr,
                    ExcMessage ("This ascii data plugin can only be used when using "
-                               "a spherical shell, chunk or box geometry."));
+                               "a spherical shell, chunk, or box geometry."));
 
       lookup = std::make_shared<Utilities::AsciiDataLookup<dim>> (components,
                                                                   this->scale_factor);
@@ -2820,6 +2987,13 @@ namespace aspect
           {
             return std::max(x,y);
           }
+          case Utilities::Operator::replace_if_valid:
+          {
+            if (std::isnan(y))
+              return x;
+            else
+              return y;
+          }
           default:
           {
             Assert (false, ExcInternalError());
@@ -2852,14 +3026,23 @@ namespace aspect
             operator_list[i] = Operator(Operator::minimum);
           else if (operator_names[i] == "maximum")
             operator_list[i] = Operator(Operator::maximum);
+          else if (operator_names[i] == "replace if valid")
+            operator_list[i] = Operator(Operator::replace_if_valid);
           else
             AssertThrow(false,
                         ExcMessage ("ASPECT only accepts the following operators: "
-                                    "add, subtract, minimum and maximum. But your parameter file "
+                                    "add, subtract, minimum, maximum, and replace if valid. But your parameter file "
                                     "contains: " + operator_names[i] + ". Please check your parameter file.") );
         }
 
       return operator_list;
+    }
+
+
+
+    const std::string get_model_operator_options()
+    {
+      return "add|subtract|minimum|maximum|replace if valid";
     }
 
 
@@ -3001,6 +3184,8 @@ namespace aspect
     template class AsciiDataBase<3>;
     template class AsciiDataBoundary<2>;
     template class AsciiDataBoundary<3>;
+    template class AsciiDataLayered<2>;
+    template class AsciiDataLayered<3>;
     template class AsciiDataInitial<2>;
     template class AsciiDataInitial<3>;
     template class AsciiDataProfile<1>;

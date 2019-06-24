@@ -29,7 +29,7 @@
   . fix formatting, copyright years:
       find . -name "*.h" -print | while read file;do $DEALSRCDIR/contrib/utilities/wrapcomments.py $file >temp;mv temp $file;done
       . note: we started ignoring the rewrapping of comments, but we should still fix wrong indentation or other problems
-      ./doc/indent
+      ./contrib/utilities/indent
       ./doc/update_copyright.sh
       git commit -a -m "doxygen formatting, comment wrapping"
       # create a pull-request
@@ -114,11 +114,13 @@
        create entry for the new release
        update the list of contributors
        ... (to be completed when we go through the 2.0 release process)
+  . update docker image geodynamics/aspect:
+    - modify docker/Dockerfile and docker/build.sh to checkout the release
+      cd docker && ./build.sh
+      docker push geodynamics/aspect:v$TAG
   . announce on
        cig-all@geodynamics.org
-       aspect-devel@geodynamics.org
-       cig-mc@geodynamics.org
-       cig-cs@geodynamics.org
+       https://community.geodynamics.org/c/aspect
        dealii@googlegroups.com
 
 
@@ -133,6 +135,10 @@ available from
                    https://aspect.geodynamics.org/
 
 and the release is available from
+
+        https://geodynamics.org/cig/software/aspect/
+
+and
 
         https://github.com/geodynamics/aspect/releases/tag/v2.1.0
 

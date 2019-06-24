@@ -25,9 +25,6 @@
 #include <aspect/geometry_model/interface.h>
 #include <aspect/simulator_access.h>
 
-#if !DEAL_II_VERSION_GTE(9,0,0)
-#include <deal.II/grid/tria_boundary_lib.h>
-#endif
 #include <deal.II/grid/manifold_lib.h>
 
 namespace aspect
@@ -51,7 +48,7 @@ namespace aspect
     {
       public:
         /**
-         *
+         * Constructor.
          */
         SphericalShell();
 
@@ -105,6 +102,16 @@ namespace aspect
          * This information is used to determine what boundary indicators can
          * be used in the input file.
          *
+         * The spherical shell may be generated as per in the original code
+         * (with respect to the inner and outer radius, and an initial number
+         * of cells along circumference) or following a custom mesh scheme:
+         * list of radial values or number of slices. A surface mesh is first
+         * generated and refined as desired, before it is extruded radially.
+         * A list of radial values subdivides the spherical shell at specified
+         * radii. The number of slices subdivides the spherical shell into N
+         * slices of equal thickness. The custom spherical shell only works
+         * with an opening angle of 360 degrees.
+         *
          * The spherical shell model uses boundary indicators zero and one,
          * with zero corresponding to the inner surface and one corresponding
          * to the outer surface. In 2d, if the geometry is only a slice of the
@@ -150,6 +157,23 @@ namespace aspect
         aspect::Utilities::Coordinates::CoordinateSystem natural_coordinate_system() const;
 
         /**
+         * Takes the Cartesian points (x,z or x,y,z) and returns standardized
+         * coordinates which are most 'natural' to the geometry model. For a spherical shell
+         * this is (radius, longitude) in 2d and (radius, longitude, latitude) in 3d.
+         */
+        virtual
+        std::array<double,dim> cartesian_to_natural_coordinates(const Point<dim> &position) const;
+
+        /**
+         * Undoes the action of cartesian_to_natural_coordinates, and turns the
+         * coordinate system which is most 'natural' to the geometry model into
+         * Cartesian coordinates.
+         */
+        virtual
+        Point<dim> natural_to_cartesian_coordinates(const std::array<double,dim> &position) const;
+
+
+        /**
          * Declare the parameters this class takes through input files. The
          * default implementation of this function does not describe any
          * parameters. Consequently, derived classes do not have to overload
@@ -189,6 +213,32 @@ namespace aspect
 
       private:
         /**
+         * Specify the radial subdivision of the spherical shell
+         * mesh.
+         */
+        enum CustomMeshRadialSubdivision
+        {
+          none,
+          list,
+          slices
+        } custom_mesh;
+
+        /**
+         * Initial surface refinement for the custom mesh cases.
+         */
+        int initial_lateral_refinement;
+
+        /**
+         * Initial surface refinement for the custom mesh cases.
+         */
+        unsigned int n_slices;
+
+        /**
+         * List of radial values for the list custom mesh.
+         */
+        std::vector<double> R_values_list;
+
+        /**
          * Inner and outer radii of the spherical shell.
          */
         double R0, R1;
@@ -214,23 +264,6 @@ namespace aspect
          */
         void set_manifold_ids (parallel::distributed::Triangulation<dim> &triangulation) const;
 
-#if !DEAL_II_VERSION_GTE(9,0,0)
-        /**
-         * Clear manifold ids from boundaries after refinement so that
-         * the boundary objects can take over for versions of deal.II,
-         * in which manifolds could not provide the normal vectors that
-         * are necessary at boundaries.
-         */
-        void clear_manifold_ids (parallel::distributed::Triangulation<dim> &triangulation) const;
-
-        /**
-         * Boundary objects that are required until deal.II 9.0,
-         * because the manifold could not provide normal vectors
-         * up to this version.
-         */
-        const HyperShellBoundary<dim> boundary_shell;
-        const StraightBoundary<dim> straight_boundary;
-#endif
     };
   }
 }

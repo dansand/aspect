@@ -21,12 +21,15 @@
 
 #include <aspect/simulator.h>
 #include <aspect/global.h>
-#include <aspect/free_surface.h>
+#include <aspect/mesh_deformation/free_surface.h>
 #include <aspect/volume_of_fluid/handler.h>
 #include <aspect/newton.h>
 #include <aspect/melt.h>
 
 #include <deal.II/numerics/vector_tools.h>
+
+#include <aspect/stokes_matrix_free.h>
+
 
 namespace aspect
 {
@@ -292,7 +295,20 @@ namespace aspect
       }
 
     assemble_stokes_system ();
-    build_stokes_preconditioner();
+
+    // Update coefficients and add correction to system rhs for
+    // marix-free method
+    if (stokes_matrix_free)
+      {
+        stokes_matrix_free->evaluate_viscosity();
+        stokes_matrix_free->correct_stokes_rhs();
+      }
+
+    // Assemble preconditioner for matrix-based
+    if (!stokes_matrix_free)
+      {
+        build_stokes_preconditioner();
+      }
 
     if (compute_initial_residual)
       {
@@ -336,8 +352,6 @@ namespace aspect
 
     if (parameters.run_postprocessors_on_nonlinear_iterations)
       postprocess ();
-
-    return;
   }
 
 
@@ -373,8 +387,6 @@ namespace aspect
         ++nonlinear_iteration;
       }
     while (nonlinear_iteration < max_nonlinear_iterations);
-
-    return;
   }
 
 
@@ -384,8 +396,6 @@ namespace aspect
   {
     if (timestep_number == 0)
       assemble_and_solve_stokes();
-
-    return;
   }
 
 
@@ -455,8 +465,6 @@ namespace aspect
         ++nonlinear_iteration;
       }
     while (nonlinear_iteration < max_nonlinear_iterations);
-
-    return;
   }
 
 
@@ -500,8 +508,6 @@ namespace aspect
         ++nonlinear_iteration;
       }
     while (nonlinear_iteration < max_nonlinear_iterations);
-
-    return;
   }
 
 
@@ -908,8 +914,6 @@ namespace aspect
 
     if (parameters.run_postprocessors_on_nonlinear_iterations)
       postprocess ();
-
-    return;
   }
 
 
@@ -919,8 +923,6 @@ namespace aspect
   {
     if (parameters.run_postprocessors_on_nonlinear_iterations)
       postprocess ();
-
-    return;
   }
 }
 

@@ -21,7 +21,7 @@
 
 #include <aspect/simulator.h>
 #include <aspect/utilities.h>
-#include <aspect/free_surface.h>
+#include <aspect/mesh_deformation/interface.h>
 #include <aspect/melt.h>
 
 #include <deal.II/base/mpi.h>
@@ -81,8 +81,21 @@ namespace aspect
     void save_critical_parameters (const Parameters<dim> &parameters,
                                    aspect::oarchive &oa)
     {
+      oa << parameters.convert_to_years;
+      oa << parameters.surface_pressure;
+      oa << parameters.use_operator_splitting;
+      oa << parameters.include_melt_transport;
+      oa << parameters.stokes_velocity_degree;
+      oa << parameters.use_locally_conservative_discretization;
+      oa << parameters.use_discontinuous_temperature_discretization;
+      oa << parameters.use_discontinuous_composition_discretization;
+      oa << parameters.temperature_degree;
+      oa << parameters.composition_degree;
+      oa << parameters.pressure_normalization;
       oa << parameters.n_compositional_fields;
       oa << parameters.names_of_compositional_fields;
+      oa << parameters.normalized_fields;
+      oa << parameters.mesh_deformation_enabled;
     }
 
 
@@ -96,10 +109,119 @@ namespace aspect
     void load_and_check_critical_parameters (const Parameters<dim> &parameters,
                                              aspect::iarchive &ia)
     {
+      bool convert_to_years;
+      ia >> convert_to_years;
+      AssertThrow (convert_to_years == parameters.convert_to_years,
+                   ExcMessage ("The value provided for `Use years in output instead of seconds' that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      double surface_pressure;
+      ia >> surface_pressure;
+      AssertThrow (surface_pressure == parameters.surface_pressure,
+                   ExcMessage ("The value of surface pressure that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      bool use_operator_splitting;
+      ia >> use_operator_splitting;
+      AssertThrow (use_operator_splitting == parameters.use_operator_splitting,
+                   ExcMessage ("The operator splitting mode that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      bool include_melt_transport;
+      ia >> include_melt_transport;
+      AssertThrow (include_melt_transport == parameters.include_melt_transport,
+                   ExcMessage ("The melt transport mode that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      unsigned int stokes_velocity_degree;
+      ia >> stokes_velocity_degree;
+      AssertThrow (stokes_velocity_degree == parameters.stokes_velocity_degree,
+                   ExcMessage ("The polynomial degree used for the Stokes "
+                               "finite element that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+
+      // It is conceivable that one could change this setting from one time
+      // step to another, but it is, at best, not tested. So disallow it for
+      // now, until someone tests it.
+      bool use_locally_conservative_discretization;
+      ia >> use_locally_conservative_discretization;
+      AssertThrow (use_locally_conservative_discretization == parameters.use_locally_conservative_discretization,
+                   ExcMessage ("The value provided for `Use locally conservative discretization' that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      bool use_discontinuous_temperature_discretization;
+      ia >> use_discontinuous_temperature_discretization;
+      AssertThrow (use_discontinuous_temperature_discretization == parameters.use_discontinuous_temperature_discretization,
+                   ExcMessage ("The value provided for `Use discontinuous temperature discretization' that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      bool use_discontinuous_composition_discretization;
+      ia >> use_discontinuous_composition_discretization;
+      AssertThrow (use_discontinuous_composition_discretization == parameters.use_discontinuous_composition_discretization,
+                   ExcMessage ("The value provided for `Use discontinuous composition discretization' that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      unsigned int temperature_degree;
+      ia >> temperature_degree;
+      AssertThrow (temperature_degree == parameters.temperature_degree,
+                   ExcMessage ("The temperature polynomial degree that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      unsigned int composition_degree;
+      ia >> composition_degree;
+      AssertThrow (composition_degree == parameters.composition_degree,
+                   ExcMessage ("The composition polynomial degree that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      // One could allow changing the pressure normalization between runs, but
+      // the change would then lead to a jump in pressure from one time step
+      // to the next when we, for example, change from requiring the *surface*
+      // average to be zero, to requiring the *domain* average to be zero.
+      // That's unlikely what the user really wanted.
+      std::string pressure_normalization;
+      ia >> pressure_normalization;
+      AssertThrow (pressure_normalization == parameters.pressure_normalization,
+                   ExcMessage ("The pressure normalization method that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
       unsigned int n_compositional_fields;
       ia >> n_compositional_fields;
       AssertThrow (n_compositional_fields == parameters.n_compositional_fields,
-                   ExcMessage ("The number of compositional fields that were stored "
+                   ExcMessage ("The number of compositional fields that was stored "
                                "in the checkpoint file is not the same as the one "
                                "you currently set in your input file. "
                                "These need to be the same during restarting "
@@ -109,6 +231,24 @@ namespace aspect
       ia >> names_of_compositional_fields;
       AssertThrow (names_of_compositional_fields == parameters.names_of_compositional_fields,
                    ExcMessage ("The names of compositional fields that were stored "
+                               "in the checkpoint file are not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      std::vector<unsigned int> normalized_fields;
+      ia >> normalized_fields;
+      AssertThrow (normalized_fields == parameters.normalized_fields,
+                   ExcMessage ("The list of normalized fields that was stored "
+                               "in the checkpoint file is not the same as the one "
+                               "you currently set in your input file. "
+                               "These need to be the same during restarting "
+                               "from a checkpoint."));
+
+      bool mesh_deformation_enabled;
+      ia >> mesh_deformation_enabled;
+      AssertThrow (mesh_deformation_enabled == parameters.mesh_deformation_enabled,
+                   ExcMessage ("The enable mesh deformation settings that were stored "
                                "in the checkpoint file is not the same as the one "
                                "you currently set in your input file. "
                                "These need to be the same during restarting "
@@ -153,9 +293,9 @@ namespace aspect
       x_system[1] = &old_solution;
       x_system[2] = &old_old_solution;
 
-      // If we are using a free surface, include the mesh velocity, which uses the system dof handler
-      if (parameters.free_surface_enabled)
-        x_system.push_back( &free_surface->mesh_velocity );
+      // If we are using a deforming mesh, include the mesh velocity, which uses the system dof handler
+      if (parameters.mesh_deformation_enabled)
+        x_system.push_back( &mesh_deformation->mesh_velocity );
 
       parallel::distributed::SolutionTransfer<dim, LinearAlgebra::BlockVector>
       system_trans (dof_handler);
@@ -166,22 +306,22 @@ namespace aspect
       system_trans.prepare_serialization (x_system);
 #endif
 
-      // If we are using a free surface, also serialize the mesh vertices vector, which
+      // If we are deforming the mesh, also serialize the mesh vertices vector, which
       // uses its own dof handler
       std::vector<const LinearAlgebra::Vector *> x_fs_system (1);
-      std::unique_ptr<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector> > freesurface_trans;
-      if (parameters.free_surface_enabled)
+      std::unique_ptr<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector> > mesh_deformation_trans;
+      if (parameters.mesh_deformation_enabled)
         {
-          freesurface_trans
+          mesh_deformation_trans
             = std_cxx14::make_unique<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>>
-              (free_surface->free_surface_dof_handler);
+              (mesh_deformation->mesh_deformation_dof_handler);
 
-          x_fs_system[0] = &free_surface->mesh_displacements;
+          x_fs_system[0] = &mesh_deformation->mesh_displacements;
 
 #if DEAL_II_VERSION_GTE(9,1,0)
-          freesurface_trans->prepare_for_serialization(x_fs_system);
+          mesh_deformation_trans->prepare_for_serialization(x_fs_system);
 #else
-          freesurface_trans->prepare_serialization(x_fs_system);
+          mesh_deformation_trans->prepare_serialization(x_fs_system);
 #endif
         }
 
@@ -311,7 +451,7 @@ namespace aspect
 
     // If necessary, also include the mesh velocity for deserialization
     // with the system dof handler
-    if (parameters.free_surface_enabled)
+    if (parameters.mesh_deformation_enabled)
       x_system.push_back(&distributed_mesh_velocity);
 
     parallel::distributed::SolutionTransfer<dim, LinearAlgebra::BlockVector>
@@ -323,20 +463,20 @@ namespace aspect
     old_solution = old_distributed_system;
     old_old_solution = old_old_distributed_system;
 
-    if (parameters.free_surface_enabled)
+    if (parameters.mesh_deformation_enabled)
       {
         // copy the mesh velocity which uses the system dof handler
-        free_surface->mesh_velocity = distributed_mesh_velocity;
+        mesh_deformation->mesh_velocity = distributed_mesh_velocity;
 
-        // deserialize and copy the vectors using the free surface dof handler
-        parallel::distributed::SolutionTransfer<dim, LinearAlgebra::Vector> freesurface_trans( free_surface->free_surface_dof_handler );
-        LinearAlgebra::Vector distributed_mesh_displacements( free_surface->mesh_locally_owned,
+        // deserialize and copy the vectors using the mesh deformation dof handler
+        parallel::distributed::SolutionTransfer<dim, LinearAlgebra::Vector> mesh_deformation_trans( mesh_deformation->mesh_deformation_dof_handler );
+        LinearAlgebra::Vector distributed_mesh_displacements( mesh_deformation->mesh_locally_owned,
                                                               mpi_communicator );
         std::vector<LinearAlgebra::Vector *> fs_system(1);
         fs_system[0] = &distributed_mesh_displacements;
 
-        freesurface_trans.deserialize (fs_system);
-        free_surface->mesh_displacements = distributed_mesh_displacements;
+        mesh_deformation_trans.deserialize (fs_system);
+        mesh_deformation->mesh_displacements = distributed_mesh_displacements;
       }
 
     // read zlib compressed resume.z

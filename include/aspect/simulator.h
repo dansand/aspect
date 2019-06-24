@@ -95,7 +95,13 @@ namespace aspect
   class NewtonHandler;
 
   template <int dim>
-  class FreeSurfaceHandler;
+  class StokesMatrixFreeHandler;
+
+  namespace MeshDeformation
+  {
+    template <int dim>
+    class MeshDeformationHandler;
+  }
 
   template <int dim>
   class VolumeOfFluidHandler;
@@ -333,6 +339,25 @@ namespace aspect
 
     private:
 
+      /**
+       * A member variable that tracks whether we are completely done
+       * with initialization and have started the time loop. This
+       * variable needs to be the first one that is initialized in
+       * the constructor, so that its value correctly tracks the
+       * status of the overall object. As a consequence, it has to
+       * be the first one declared in this class.
+       *
+       * The variable is set to @p true just before we start the time
+       * stepping loop, but may be temporarily reset to @p false
+       * if, for example, we are during the initial mesh refinement
+       * steps where we start the time loop, but then go back to
+       * initialization steps (mesh refinement, interpolation of initial
+       * conditions, etc.) before re-starting the time loop.
+       *
+       * This variable is queried by
+       * SimulatorAccess::simulator_is_past_initialization().
+       */
+      bool simulator_is_past_initialization;
 
       /**
        * A class that is empty but that can be used as a member variable and
@@ -438,6 +463,20 @@ namespace aspect
        * <code>source/simulator/core.cc</code>.
        */
       void compute_current_constraints ();
+
+      /**
+       * Compute the factor by which we scale the second of
+       * the Stokes equations (the "pressure scaling factor").
+       * We do this for the current time step by taking some kind
+       * of average of the viscosities we find on the cells in this domain.
+       *
+       * This function then updates the pressure_scaling variable using
+       * this computed reference viscosity.
+       *
+       * This function is implemented in
+       * <code>source/simulator/helper_functions.cc</code>.
+       */
+      void compute_pressure_scaling_factor ();
 
       /**
        * Do some housekeeping at the beginning of each time step. This
@@ -744,6 +783,12 @@ namespace aspect
        */
       std::pair<double,double>
       solve_stokes ();
+
+      /**
+       * Solve the Stokes system using a block preconditioner and GMG.
+       */
+      std::pair<double,double>
+      solve_stokes_block_gmg ();
 
       /**
        * This function is called at the end of every time step. It runs all
@@ -1824,16 +1869,22 @@ namespace aspect
     private:
 
       /**
-       * Unique pointer for an instance of the FreeSurfaceHandler. this way,
-       * if we do not need the machinery for doing free surface stuff, we do
+       * Unique pointer for an instance of the MeshDeformationHandler. this way,
+       * if we do not need the machinery for doing mesh deformation stuff, we do
        * not even allocate it.
        */
-      std::unique_ptr<FreeSurfaceHandler<dim> > free_surface;
+      std::unique_ptr<MeshDeformation::MeshDeformationHandler<dim> > mesh_deformation;
+
+      /**
+       * Unique pointer for the matrix-free Stokes solver
+       */
+      std::unique_ptr<StokesMatrixFreeHandler<dim> > stokes_matrix_free;
 
       friend class boost::serialization::access;
       friend class SimulatorAccess<dim>;
-      friend class FreeSurfaceHandler<dim>;   // FreeSurfaceHandler needs access to the internals of the Simulator
+      friend class MeshDeformation::MeshDeformationHandler<dim>;   // MeshDeformationHandler needs access to the internals of the Simulator
       friend class VolumeOfFluidHandler<dim>; // VolumeOfFluidHandler needs access to the internals of the Simulator
+      friend class StokesMatrixFreeHandler<dim>;
       friend struct Parameters<dim>;
   };
 }

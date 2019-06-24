@@ -32,7 +32,6 @@
 #include <aspect/particle/generator/interface.h>
 #include <aspect/particle/integrator/interface.h>
 #include <aspect/particle/interpolator/interface.h>
-#include <aspect/particle/output/interface.h>
 #include <aspect/particle/property/interface.h>
 #include <aspect/postprocess/visualization.h>
 
@@ -278,9 +277,6 @@ namespace aspect
     Particle::Generator::write_plugin_graph<dim>(out);
     Particle::Integrator::write_plugin_graph<dim>(out);
     Particle::Interpolator::write_plugin_graph<dim>(out);
-#if !DEAL_II_VERSION_GTE(9,0,0)
-    Particle::Output::write_plugin_graph<dim>(out);
-#endif
     Particle::Property::Manager<dim>::write_plugin_graph(out);
     Postprocess::Manager<dim>::write_plugin_graph(out);
     Postprocess::Visualization<dim>::write_plugin_graph(out);
@@ -313,6 +309,18 @@ namespace aspect
     output_statistics_thread = Threads::new_thread (&do_output_statistics,
                                                     parameters.output_directory+"statistics",
                                                     new TableHandler(statistics));
+  }
+
+
+
+  template <int dim>
+  void
+  Simulator<dim>::
+  compute_pressure_scaling_factor()
+  {
+    // Determine how to treat the pressure. we have to scale it for the solver
+    // to make velocities and pressures of roughly the same (numerical) size
+    pressure_scaling = material_model->reference_viscosity() / geometry_model->length_scale();
   }
 
 
@@ -839,11 +847,20 @@ namespace aspect
       const double my_temp[2] = {my_pressure, my_area};
       double temp[2];
       Utilities::MPI::sum (my_temp, mpi_communicator, temp);
+      const double pressure = temp[0];
+      const double area = temp[1];
+
+      Assert (area > 0,
+              ExcMessage("While computing the average pressure, the area/volume "
+                         "to integrate over was found to be zero or negative. This "
+                         "indicates that no appropriate surface faces were found, "
+                         "which is typically the case if the geometry model is not "
+                         "set up correctly."));
 
       if (parameters.pressure_normalization == "surface")
-        pressure_adjustment = -temp[0]/temp[1] + parameters.surface_pressure;
+        pressure_adjustment = -pressure/area + parameters.surface_pressure;
       else if (parameters.pressure_normalization == "volume")
-        pressure_adjustment = -temp[0]/temp[1];
+        pressure_adjustment = -pressure/area;
       else
         AssertThrow(false, ExcNotImplemented());
     }
@@ -2032,7 +2049,6 @@ namespace aspect
     std::set<types::boundary_id> boundary_indicator_lists[6]
       = { boundary_velocity_manager.get_zero_boundary_velocity_indicators(),
           boundary_velocity_manager.get_tangential_boundary_velocity_indicators(),
-          parameters.free_surface_boundary_indicators,
           std::set<types::boundary_id>()   // to be prescribed velocity and traction boundary indicators
         };
 
@@ -2194,8 +2210,6 @@ namespace aspect
                      is_element( (*p).first.second, boundary_indicator_lists[0] ) == false && // zero velocity
                      is_element( (*p).first.first, boundary_indicator_lists[1] ) == false && // tangential velocity
                      is_element( (*p).first.second, boundary_indicator_lists[1] ) == false && // tangential velocity
-                     is_element( (*p).first.first, boundary_indicator_lists[2] ) == false && // free surface
-                     is_element( (*p).first.second, boundary_indicator_lists[2] ) == false && // free surface
                      is_element( (*p).first.first, boundary_indicator_lists[3] ) == false && // prescribed traction or velocity
                      is_element( (*p).first.second, boundary_indicator_lists[3] ) == false,  // prescribed traction or velocity
                      ExcMessage("Periodic boundaries must not have boundary conditions set."));
@@ -2347,6 +2361,7 @@ namespace aspect
   template void Simulator<dim>::denormalize_pressure(const double pressure_adjustment, \
                                                      LinearAlgebra::BlockVector &vector, \
                                                      const LinearAlgebra::BlockVector &relevant_vector) const; \
+  template void Simulator<dim>::compute_pressure_scaling_factor (); \
   template double Simulator<dim>::get_maximal_velocity (const LinearAlgebra::BlockVector &solution) const; \
   template std::pair<double,double> Simulator<dim>::get_extrapolated_advection_field_range (const AdvectionField &advection_field) const; \
   template void Simulator<dim>::maybe_write_timing_output () const; \

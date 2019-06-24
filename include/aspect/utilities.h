@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2014 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -269,12 +269,11 @@ namespace aspect
      * distance of the point to the polygon. The sign is negative for points outside of
      * the polygon and positive for points inside the polygon.
      */
-
-
     template <int dim>
     double
     signed_distance_to_polygon(const std::vector<Point<2> > &point_list,
                                const dealii::Point<2> &point);
+
 
     /**
      * Given a 2d point and a list of two points that define a line, compute the smallest
@@ -282,13 +281,8 @@ namespace aspect
      * base does not lie on the line segment, the smallest distance to the segment's end
      * points is calculated.
      */
-    //double
-    //distance_to_line(const std::array<dealii::Point<2>,2 > &point_list,
-    //                 const dealii::Point<2> &point);
-
-    template <int dim>
     double
-    distance_to_line(const std::vector<dealii::Point<2> > &point_list,
+    distance_to_line(const std::array<dealii::Point<2>,2 > &point_list,
                      const dealii::Point<2> &point);
 
     /**
@@ -568,7 +562,7 @@ namespace aspect
          * therefore when using this constructor it is necessary to provide
          * this list in the first uncommented line of the data file.
          */
-        AsciiDataLookup(const double scale_factor);
+        explicit AsciiDataLookup(const double scale_factor);
 
         /**
          * Loads a data text file. Throws an exception if the file does not
@@ -585,7 +579,9 @@ namespace aspect
          *
          * @param position The current position to compute the data (velocity,
          * temperature, etc.)
-         * @param component The index of the data column to be returned.
+         * @param component The index (starting at 0) of the data column to be
+         * returned. The index is therefore less than the number of data
+         * columns in the data file (or specified in the constructor).
          */
         double
         get_data(const Point<dim> &position,
@@ -826,7 +822,7 @@ namespace aspect
          * A variable that stores the currently used data file of a series. It
          * gets updated if necessary by update().
          */
-        int  current_file_number;
+        int current_file_number;
 
         /**
          * Time from which on the data file with number 'First data file
@@ -875,13 +871,13 @@ namespace aspect
          * data we get from text files.
          */
         std::map<types::boundary_id,
-            std::shared_ptr<aspect::Utilities::AsciiDataLookup<dim-1> > > lookups;
+            std::unique_ptr<aspect::Utilities::AsciiDataLookup<dim-1> > > lookups;
 
         /**
          * Map between the boundary id and the old data objects.
          */
         std::map<types::boundary_id,
-            std::shared_ptr<aspect::Utilities::AsciiDataLookup<dim-1> > > old_lookups;
+            std::unique_ptr<aspect::Utilities::AsciiDataLookup<dim-1> > > old_lookups;
 
         /**
          * Handles the update of the data in lookup.
@@ -901,9 +897,11 @@ namespace aspect
          * Create a filename out of the name template.
          */
         std::string
-        create_filename (const int timestep,
+        create_filename (const int filenumber,
                          const types::boundary_id boundary_id) const;
     };
+
+
 
     /**
      * A base class that implements initial conditions determined from a
@@ -939,8 +937,89 @@ namespace aspect
          * Pointer to an object that reads and processes data we get from text
          * files.
          */
-        std::shared_ptr<aspect::Utilities::AsciiDataLookup<dim> > lookup;
+        std::unique_ptr<aspect::Utilities::AsciiDataLookup<dim> > lookup;
     };
+
+
+    /**
+     * A base class that implements conditions determined from a
+     * layered AsciiData input file.
+     */
+    template <int dim>
+    class AsciiDataLayered : public Utilities::AsciiDataBase<dim>, public SimulatorAccess<dim>
+    {
+      public:
+        /**
+         * Constructor
+         */
+        AsciiDataLayered();
+
+        /**
+         * Initialization function. This function is called once at the
+         * beginning of the program. Checks preconditions.
+         */
+        virtual
+        void
+        initialize (const unsigned int components);
+
+
+        /**
+         * Returns the data component at the given position.
+         */
+        double
+        get_data_component (const Point<dim> &position,
+                            const unsigned int component) const;
+
+
+        /**
+         * Declare the parameters all derived classes take from input files.
+         */
+        static
+        void
+        declare_parameters (ParameterHandler  &prm,
+                            const std::string &default_directory,
+                            const std::string &default_filename,
+                            const std::string &subsection_name = "Ascii data model");
+
+        /**
+         * Read the parameters from the parameter file.
+         */
+        void
+        parse_parameters (ParameterHandler &prm,
+                          const std::string &subsection_name = "Ascii data model");
+
+      protected:
+        /**
+         * Pointer to an object that reads and processes data we get from text
+         * files.
+         */
+        std::vector<std::unique_ptr<aspect::Utilities::AsciiDataLookup<dim-1> >> lookups;
+
+      private:
+
+        /**
+         * Directory in which the data files are present.
+         */
+        std::string data_directory;
+
+        /**
+         * Filenames of data files.
+         */
+        std::vector<std::string> data_file_names;
+
+        /**
+         * Number of layer boundaries in the model.
+         */
+        unsigned int number_of_layer_boundaries;
+
+        /**
+         * Interpolation scheme for profile averaging.
+         */
+        std::string interpolation_scheme;
+
+
+    };
+
 
     /**
      * A base class that reads in a data profile and provides its values.
@@ -1123,7 +1202,8 @@ namespace aspect
           add,
           subtract,
           minimum,
-          maximum
+          maximum,
+          replace_if_valid
         };
 
         /**
@@ -1161,6 +1241,11 @@ namespace aspect
      * entry in the list must match one of the allowed operations.
      */
     std::vector<Operator> create_model_operator_list(const std::vector<std::string> &operator_names);
+
+    /**
+     * Create a string of model operators for use in declare_parameters
+     */
+    const std::string get_model_operator_options();
 
     /**
      * A function that returns a SymmetricTensor, whose entries are zero, except for

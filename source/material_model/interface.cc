@@ -327,29 +327,33 @@ namespace aspect
       composition(fe_values.n_quadrature_points, std::vector<double>(introspection.n_compositional_fields, numbers::signaling_nan<double>())),
       strain_rate(fe_values.n_quadrature_points, numbers::signaling_nan<SymmetricTensor<2,dim> >()),
       cell(cell_x.state() == IteratorState::valid ? &current_cell : nullptr),
-#if DEAL_II_VERSION_GTE(9,0,0)
       current_cell (cell_x)
-#else
-      current_cell(cell_x.state() == IteratorState::valid ? cell_x : typename DoFHandler<dim>::active_cell_iterator())
-#endif
     {
       // Call the function reinit to populate the new arrays.
       this->reinit(fe_values, current_cell, introspection, solution_vector, use_strain_rate);
     }
 
+
+
     template <int dim>
-    MaterialModelInputs<dim>::MaterialModelInputs(const MaterialModelInputs &material)
+    MaterialModelInputs<dim>::MaterialModelInputs(const MaterialModelInputs &source)
       :
-      position(material.position),
-      temperature(material.temperature),
-      pressure(material.pressure),
-      pressure_gradient(material.pressure_gradient),
-      velocity(material.velocity),
-      composition(material.composition),
-      strain_rate(material.strain_rate),
-      cell(material.cell),
-      current_cell(material.current_cell)
-    {}
+      position(source.position),
+      temperature(source.temperature),
+      pressure(source.pressure),
+      pressure_gradient(source.pressure_gradient),
+      velocity(source.velocity),
+      composition(source.composition),
+      strain_rate(source.strain_rate),
+      cell(source.cell),
+      current_cell(source.current_cell)
+    {
+      Assert (source.additional_inputs.size() == 0,
+              ExcMessage ("You can not copy MaterialModelInputs objects that have "
+                          "additional input objects attached"));
+    }
+
+
     DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
 
@@ -389,11 +393,7 @@ namespace aspect
       this->cell = cell_x.state() == IteratorState::valid ? &cell_x : nullptr;
       DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
-#if DEAL_II_VERSION_GTE(9,0,0)
       this->current_cell = cell_x;
-#else
-      this->current_cell = (cell_x.state() == IteratorState::valid ? cell_x : typename DoFHandler<dim>::active_cell_iterator());
-#endif
 
     }
 
@@ -411,6 +411,26 @@ namespace aspect
       entropy_derivative_temperature(n_points, numbers::signaling_nan<double>()),
       reaction_terms(n_points, std::vector<double>(n_comp, numbers::signaling_nan<double>()))
     {}
+
+
+    template <int dim>
+    MaterialModelOutputs<dim>::MaterialModelOutputs(const MaterialModelOutputs<dim> &source)
+      :
+      viscosities(source.viscosities),
+      densities(source.densities),
+      thermal_expansion_coefficients(source.thermal_expansion_coefficients),
+      specific_heat(source.specific_heat),
+      thermal_conductivities(source.thermal_conductivities),
+      compressibilities(source.compressibilities),
+      entropy_derivative_pressure(source.entropy_derivative_pressure),
+      entropy_derivative_temperature(source.entropy_derivative_temperature),
+      reaction_terms(source.reaction_terms),
+      additional_outputs()
+    {
+      Assert (source.additional_outputs.size() == 0,
+              ExcMessage ("You can not copy MaterialModelOutputs objects that have "
+                          "additional output objects attached"));
+    }
 
 
     namespace MaterialAveraging
