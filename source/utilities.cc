@@ -726,8 +726,9 @@ namespace aspect
       return *std::min_element(distances.begin(),distances.end()) * sign;
     }
 
+    template <int dim>
     double
-    distance_to_line(const std::array<dealii::Point<2>,2 > &point_list,
+    distance_to_line(const std::vector<dealii::Point<2> > &point_list,
                      const dealii::Point<2> &point)
     {
 
@@ -748,24 +749,24 @@ namespace aspect
       AssertThrow(n_poly_points == 2, ExcMessage("A list of points for a line segment should consist of 2 points."));
 
       // Create vector along the polygon line segment P0 to P1
-      const Tensor<1,2> vector_segment = point_list[1] - point_list[0];
+      Tensor<1,2> vector_segment = point_list[1] - point_list[0];
       // Create vector from point P to the second segment point
-      const Tensor<1,2> vector_point_segment = point - point_list[0];
+      Tensor<1,2> vector_point_segment = point - point_list[0];
 
       // Compute dot products to get angles
       const double c1 = vector_point_segment * vector_segment;
 
       // Point P's perpendicular base line lies outside segment, before P0.
-      // Return distance between points P and P0.
-      if (c1 <= 0.0)
-        return (Tensor<1,2> (point_list[0] - point)).norm();
+      // Return an insane distance.
+      if (c1 < 0.0)
+        return 1e23;
 
       const double c2 = vector_segment * vector_segment;
 
       // Point P's perpendicular base line lies outside segment, after P1.
-      // Return distance between points P and P1.
-      if (c2 <= c1)
-        return (Tensor<1,2> (point_list[1] - point)).norm();
+      // Return an insane distance.
+      if (c2 < c1)
+        return 1e23;
 
       // Point P's perpendicular base line lies on the line segment.
       // Return distance between point P and the base point.
@@ -3186,6 +3187,9 @@ namespace aspect
 
     template double signed_distance_to_polygon<2>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
     template double signed_distance_to_polygon<3>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
+
+    template double distance_to_line<2>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
+    template double distance_to_line<3>(const std::vector<Point<2> > &pointList, const dealii::Point<2> &point);
 
 
     template std::array<Tensor<1,2>,1> orthogonal_vectors (const Tensor<1,2> &v);

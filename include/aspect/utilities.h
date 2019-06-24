@@ -281,9 +281,9 @@ namespace aspect
      * base does not lie on the line segment, the smallest distance to the segment's end
      * points is calculated.
      */
-    template <int dim> 
+    template <int dim>
     double
-    distance_to_line(const std::array<dealii::Point<2>,dim-1 > &point_list,
+    distance_to_line(const std::vector<dealii::Point<2> > &point_list,
                      const dealii::Point<2> &point);
 
     /**
