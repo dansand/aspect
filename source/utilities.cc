@@ -719,12 +719,7 @@ namespace aspect
       for (unsigned int i = 0; i < n_poly_points; ++i)
         {
           const std::array<Point<2>,2 > list = {{point_list[i], shifted_point_list[i]}};
-          // a hack to convert this to a vector
-          const std::vector<Point<2>> myvector(list.begin(), list.end());
-
-          //std::vector<std::vector<Point<2> > > point_list;
-
-          distances[i] = distance_to_line(myvector, point);
+          distances[i] = distance_to_line(list, point);
         }
 
       // Return the minimum of the distances of the point to all polygon segments
