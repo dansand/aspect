@@ -681,6 +681,8 @@ namespace aspect
       return (wn != 0);
     }
 
+
+
     template <int dim>
     double
     signed_distance_to_polygon(const std::vector<Point<2> > &point_list,
@@ -718,13 +720,35 @@ namespace aspect
 
       for (unsigned int i = 0; i < n_poly_points; ++i)
         {
-          const std::array<Point<2>,2 > list = {{point_list[i], shifted_point_list[i]}};
-          distances[i] = distance_to_line(list, point);
+          // Create vector along the polygon line segment
+          Tensor<1,2> vector_segment = shifted_point_list[i] - point_list[i];
+          // Create vector from point to the second segment point
+          Tensor<1,2> vector_point_segment = point - point_list[i];
+
+          // Compute dot products to get angles
+          const double c1 = vector_point_segment * vector_segment;
+          const double c2 = vector_segment * vector_segment;
+
+          // point lies closer to not-shifted polygon point, but perpendicular base line lies outside segment
+          if (c1 <= 0.0)
+            distances[i] = (Tensor<1,2> (point_list[i] - point)).norm();
+          // point lies closer to shifted polygon point, but perpendicular base line lies outside segment
+          else if (c2 <= c1)
+            distances[i] = (Tensor<1,2> (shifted_point_list[i] - point)).norm();
+          // perpendicular base line lies on segment
+          else
+            {
+              const Point<2> point_on_segment = point_list[i] + (c1/c2) * vector_segment;
+              distances[i] = (Tensor<1,2> (point - point_on_segment)).norm();
+            }
         }
 
       // Return the minimum of the distances of the point to all polygon segments
       return *std::min_element(distances.begin(),distances.end()) * sign;
     }
+
+
+
 
     template <int dim>
     double
