@@ -651,8 +651,30 @@ namespace aspect
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
+          //for (unsigned int c=0; c<in.composition[i].size(); ++c)
+          //  out.reaction_terms[i][c] = 0.0;
+
+          // Now compute changes in the compositional fields (i.e. the accumulated strain).
+          const std::vector<double> &composition = in.composition[i];
+          const double depth = this->get_geometry_model().depth(in.position[i]);
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
-            out.reaction_terms[i][c] = 0.0;
+            {
+              double delta_C = 0.0;
+              switch (c)
+                {
+                  case 0:
+                    if (depth < reaction_depth) delta_C = -composition[0];
+                    break;
+                  case 1:
+                    if (depth < reaction_depth) delta_C = composition[0];
+                    break;
+                  default:
+                    delta_C = 0.0;
+                    break;
+                }
+              out.reaction_terms[i][c] = delta_C;
+             }
+      
 
           // If strain weakening is used, overwrite the first reaction term,
           // which represents the second invariant of the (plastic) strain tensor.
@@ -1005,6 +1027,10 @@ namespace aspect
                              "Using a pressure gradient of 32436 Pa/m, then a value of "
                              "0.3 $K/km$ = 0.0003 $K/m$ = 9.24e-09 $K/Pa$ gives an earth-like adiabat."
                              "Units: $K/Pa$");
+           prm.declare_entry ("Reaction depth", "0", Patterns::Double (0),
+                    "Above this depth the compositional fields react: "
+                    "The first field gets converted to the second field. "
+         "Units: $m$.");
         }
         prm.leave_subsection();
       }
@@ -1038,6 +1064,7 @@ namespace aspect
           min_visc = prm.get_double ("Minimum viscosity");
           max_visc = prm.get_double ("Maximum viscosity");
           ref_visc = prm.get_double ("Reference viscosity");
+          reaction_depth = prm.get_double ("Reaction depth");
 
           thermal_diffusivities = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Thermal diffusivities"))),
                                                                           n_fields,
