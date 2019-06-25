@@ -60,8 +60,8 @@ namespace aspect
       // Get the distance to the ridge axis
       double distance_to_ridge = 1e23;
       Point<2> surface_position;
-      const std::list<std::shared_ptr<InitialComposition::Interface<dim> > > initial_composition_objects = this->get_initial_composition_manager().get_active_initial_composition_conditions();
-      for (typename std::list<std::shared_ptr<InitialComposition::Interface<dim> > >::const_iterator it = initial_composition_objects.begin(); it != initial_composition_objects.end(); ++it)
+      const std::list<std::unique_ptr<InitialComposition::Interface<dim> > > initial_composition_objects = this->get_initial_composition_manager().get_active_initial_composition_conditions();
+      for (typename std::list<std::unique_ptr<InitialComposition::Interface<dim> > >::const_iterator it = initial_composition_objects.begin(); it != initial_composition_objects.end(); ++it)
         if ( InitialComposition::RidgeSegments<dim> *ic = dynamic_cast<InitialComposition::RidgeSegments<dim> *> ((*it).get()))
           {
             surface_position = ic->surface_position(position, cartesian_geometry);
