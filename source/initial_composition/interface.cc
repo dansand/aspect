@@ -142,7 +142,7 @@ namespace aspect
       // their own parameters
       for (unsigned int i=0; i<model_names.size(); ++i)
         {
-          initial_composition_objects.push_back (std::unique_ptr<Interface<dim> >
+          initial_composition_objects.push_back (std::shared_ptr<Interface<dim> >
                                                  (std::get<dim>(registered_plugins)
                                                   .create_plugin (model_names[i],
                                                                   "Initial composition model::Model names")));

@@ -242,7 +242,7 @@ namespace aspect
          * A list of initial composition objects that have been requested in the
          * parameter file.
          */
-        std::list<std::unique_ptr<Interface<dim> > > initial_composition_objects;
+        std::list<std::shared_ptr<Interface<dim> > > initial_composition_objects;
 
         /**
          * A list of names of initial composition objects that have been requested
@@ -309,7 +309,7 @@ namespace aspect
                              "that could not be found in the current model. Activate this "
                              "initial composition model in the input file."));
 
-      typename std::list<std::unique_ptr<Interface<dim> > >::const_iterator initial_composition_model;
+      typename std::list<std::shared_ptr<Interface<dim> > >::const_iterator initial_composition_model;
       for (const auto &p : initial_composition_objects)
         if (Plugins::plugin_type_matches<InitialCompositionType>(*p))
           return Plugins::get_plugin_as_type<InitialCompositionType>(*p);
