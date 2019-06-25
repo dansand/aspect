@@ -184,7 +184,7 @@ namespace aspect
 
 
     template <int dim>
-    const std::list<std::unique_ptr<Interface<dim> > > &
+    const std::list<std::shared_ptr<Interface<dim> > > &
     Manager<dim>::get_active_initial_composition_conditions () const
     {
       return initial_composition_objects;
