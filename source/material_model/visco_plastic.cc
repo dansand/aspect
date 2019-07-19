@@ -551,6 +551,12 @@ namespace aspect
     {
       // Store which components to exclude during volume fraction computation.
       ComponentMask composition_mask(this->n_compositional_fields(),true);
+
+      // this is masking the compositional fields related to the stress   
+      for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+        composition_mask.set(i,false);
+
+
       if (weakening_mechanism != none)
         {
           if (weakening_mechanism == plastic_weakening_with_plastic_strain_only || weakening_mechanism == plastic_weakening_with_plastic_strain_and_viscous_weakening_with_viscous_strain)
@@ -583,6 +589,10 @@ namespace aspect
     {
       // Store which components do not represent volumetric compositions (e.g. strain components).
       const ComponentMask volumetric_compositions = get_volumetric_composition_mask();
+
+      std::vector<double> average_elastic_shear_moduli (in.temperature.size());
+      std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
+      EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
@@ -635,7 +645,21 @@ namespace aspect
               // We have given the user freedom to apply alternative bounds, because in diffusion-dominated
               // creep (where n_diff=1) viscosities are stress and strain-rate independent, so the calculation
               // of compositional field viscosities is consistent with any averaging scheme.
-              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+              //out.viscosities[i] = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+
+              // Average viscosity and shear modulus
+              const double average_viscosity = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, viscosity_averaging);
+
+              // Average viscoelastic (e.g., effective) viscosity (equation 28 in Moresi et al., 2003, J. Comp. Phys.)
+              out.viscosities[i] = elastic_rheology.calculate_viscoelastic_viscosity(average_viscosity,
+                                                                                     average_elastic_shear_moduli[i]);
+
+              // Fill the material properties that are part of the elastic additional outputs
+              if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
+                {
+                  elastic_out->elastic_shear_moduli[i] = average_elastic_shear_moduli[i];
+}
 
               // Decide based on the maximum composition if material is yielding.
               // This avoids for example division by zero for harmonic averaging (as plastic_yielding
@@ -674,7 +698,7 @@ namespace aspect
                 }
               out.reaction_terms[i][c] = delta_C;
              }
-      
+
 
           // If strain weakening is used, overwrite the first reaction term,
           // which represents the second invariant of the (plastic) strain tensor.
@@ -742,6 +766,7 @@ namespace aspect
         prm.enter_subsection ("Visco Plastic");
         {
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
+          Rheology::Elasticity<dim>::declare_parameters (prm);
 
           // Reference and minimum/maximum values
           prm.declare_entry ("Reference temperature", "293", Patterns::Double(0),
@@ -1057,6 +1082,10 @@ namespace aspect
           equation_of_state.initialize_simulator (this->get_simulator());
           equation_of_state.parse_parameters (prm);
 
+          // Elastic parameters
+          equation_of_state.initialize_simulator (this->get_simulator());
+          equation_of_state.parse_parameters (prm);
+
           // Reference and minimum/maximum values
           reference_T = prm.get_double("Reference temperature");
           min_strain_rate = prm.get_double("Minimum strain rate");
@@ -1332,6 +1361,7 @@ namespace aspect
     void
     ViscoPlastic<dim>::create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const
     {
+      elastic_rheology.create_elastic_outputs(out); //this line added by dan
       if (out.template get_additional_output<PlasticAdditionalOutputs<dim> >() == nullptr)
         {
           const unsigned int n_points = out.viscosities.size();
