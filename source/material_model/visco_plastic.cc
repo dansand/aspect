@@ -552,7 +552,7 @@ namespace aspect
       // Store which components to exclude during volume fraction computation.
       ComponentMask composition_mask(this->n_compositional_fields(),true);
 
-      // this is masking the compositional fields related to the stress   
+      // this is masking the compositional fields related to the stress
       for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
         composition_mask.set(i,false);
 
@@ -592,8 +592,6 @@ namespace aspect
 
       std::vector<double> average_elastic_shear_moduli (in.temperature.size());
       std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
-      EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
-
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
       // Loop through all requested points
