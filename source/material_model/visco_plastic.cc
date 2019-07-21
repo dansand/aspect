@@ -673,30 +673,28 @@ namespace aspect
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
-          //for (unsigned int c=0; c<in.composition[i].size(); ++c)
-          //  out.reaction_terms[i][c] = 0.0;
+          for (unsigned int c=0; c<in.composition[i].size(); ++c)
+            out.reaction_terms[i][c] = 0.0;
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
-          const std::vector<double> &composition = in.composition[i];
-          const double depth = this->get_geometry_model().depth(in.position[i]);
-          for (unsigned int c=0; c<in.composition[i].size(); ++c)
-            {
-              double delta_C = 0.0;
-              switch (c)
-                {
-                  case 0:
-                    if (depth < reaction_depth) delta_C = -composition[0];
-                    break;
-                  case 1:
-                    if (depth < reaction_depth) delta_C = composition[0];
-                    break;
-                  default:
-                    delta_C = 0.0;
-                    break;
-                }
-              out.reaction_terms[i][c] = delta_C;
-             }
-
+          //const std::vector<double> &composition = in.composition[i];
+          //const double depth = this->get_geometry_model().depth(in.position[i]);
+          //for (unsigned int c=0; c<in.composition[i].size(); ++c)
+          //  {
+          //    double delta_C = 0.0;
+          //    switch (c)
+          //      {
+          //        case 0:
+          //          if (depth < reaction_depth) delta_C = -composition[0];
+          //          break;
+          //        case 1:
+          //          if (depth < reaction_depth) delta_C = composition[0];
+          //          break;
+          //        default:
+          //          delta_C = 0.0;
+          //          break;
+          //      }
+          //    out.reaction_terms[i][c] = delta_C;
 
           // If strain weakening is used, overwrite the first reaction term,
           // which represents the second invariant of the (plastic) strain tensor.
