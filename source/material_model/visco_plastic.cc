@@ -705,8 +705,37 @@ namespace aspect
             {
               const double edot_ii = std::max(sqrt(std::fabs(second_invariant(deviator(in.strain_rate[i])))),min_strain_rate);
               const double e_ii = edot_ii*this->get_timestep();
-              if (weakening_mechanism == plastic_weakening_with_plastic_strain_only && plastic_yielding == true)
-                out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = e_ii;
+              double healing_inc = healing_rate*this->get_timestep();
+              double healing_plastic_strain_term = -1.0*healing_inc;
+              if (weakening_mechanism == plastic_weakening_with_plastic_strain_only)
+                {
+                  // grab the current value of the plastic strain
+                  const double current_plastic_strain =  in.composition[i][this->introspection().compositional_index_for_name("plastic_strain")];
+                  const double predicted_healed_strain = current_plastic_strain-1.0*healing_inc;
+                  if (predicted_healed_strain < healing_strain_limit && current_plastic_strain > healing_strain_limit)
+                    {
+                      healing_inc = current_plastic_strain - healing_strain_limit;
+                      healing_plastic_strain_term = -1.0*healing_inc;
+                    }
+
+                  if (current_plastic_strain < healing_strain_limit)
+                    {
+                      healing_plastic_strain_term = 0.0;
+                    }
+
+                  // is plastic yielding, add the scalar strain increment to the healing increment
+                  if (weakening_mechanism == plastic_weakening_with_plastic_strain_only && plastic_yielding == true)
+                    {
+                      healing_plastic_strain_term += e_ii;
+                    }
+                  // make sure the plastic strain is does not go below zero
+                  if ((current_plastic_strain + healing_plastic_strain_term) < 0.)
+                     healing_plastic_strain_term = -1.0*current_plastic_strain;
+                  //add the healing/plastic strain
+                  out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = healing_plastic_strain_term;
+
+                }
+
               if (weakening_mechanism == viscous_weakening_with_viscous_strain_only && plastic_yielding == false)
                 out.reaction_terms[i][this->introspection().compositional_index_for_name("viscous_strain")] = e_ii;
               if (weakening_mechanism == total_strain || weakening_mechanism == plastic_weakening_with_total_strain_only)
@@ -938,6 +967,13 @@ namespace aspect
                              "for background material and compositional fields, "
                              "for a total of N+1 values, where N is the number of compositional fields. "
                              "If only one value is given, then all use the same value.  Units: None");
+          prm.declare_entry ("Healing rate", "0", Patterns::Double (0),
+                             "Plastic strain healing rate "
+                             "Units: $1/s$.");
+          prm.declare_entry ("Healing strain limit", "0", Patterns::Double (0),
+                             "Plastic strain is not healed beneath this value  "
+                             "Units: None");
+
 
           // Rheological parameters
           prm.declare_entry ("Grain size", "1e-3", Patterns::Double(0), "Units: $m$");
@@ -1090,6 +1126,9 @@ namespace aspect
           max_visc = prm.get_double ("Maximum viscosity");
           ref_visc = prm.get_double ("Reference viscosity");
           reaction_depth = prm.get_double ("Reaction depth");
+          healing_rate = prm.get_double ("Healing rate");
+          reaction_depth = prm.get_double ("Reaction depth");
+          healing_strain_limit = prm.get_double ("Healing strain limit");
 
           thermal_diffusivities = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Thermal diffusivities"))),
                                                                           n_fields,
