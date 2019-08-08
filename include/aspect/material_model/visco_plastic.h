@@ -177,7 +177,8 @@ namespace aspect
         double max_visc;
         double ref_visc;
         double reaction_depth;
-
+        double healing_rate;
+        double healing_strain_limit;
         double grain_size;
 
         std::vector<double> thermal_diffusivities;
