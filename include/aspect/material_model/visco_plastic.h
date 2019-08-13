@@ -23,6 +23,7 @@
 
 #include <aspect/material_model/interface.h>
 #include <aspect/simulator_access.h>
+#include <aspect/material_model/rheology/elasticity.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
 
 #include<deal.II/fe/component_mask.h>
@@ -179,6 +180,7 @@ namespace aspect
         double reaction_depth;
         double healing_rate;
         double healing_strain_limit;
+
         double grain_size;
 
         std::vector<double> thermal_diffusivities;
@@ -384,6 +386,8 @@ namespace aspect
         std::vector<double> angles_internal_friction;
         std::vector<double> cohesions;
         std::vector<double> exponents_stress_limiter;
+
+        Rheology::Elasticity<dim> elastic_rheology;
 
         /**
          * Limit maximum yield stress from drucker-prager.

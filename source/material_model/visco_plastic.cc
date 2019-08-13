@@ -551,6 +551,16 @@ namespace aspect
     {
       // Store which components to exclude during volume fraction computation.
       ComponentMask composition_mask(this->n_compositional_fields(),true);
+      //if (this->get_parameters().enable_elasticity == true)
+      //  {
+      //    // assign compositional fields associated with viscoelastic stress a value of 0
+      //    // assume these fields are listed first
+      //    for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+      //      composition_mask.set(i,false);
+      //  }
+      for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+        composition_mask.set(i,false);
+
       if (weakening_mechanism != none)
         {
           if (weakening_mechanism == plastic_weakening_with_plastic_strain_only || weakening_mechanism == plastic_weakening_with_plastic_strain_and_viscous_weakening_with_viscous_strain)
@@ -584,6 +594,8 @@ namespace aspect
       // Store which components do not represent volumetric compositions (e.g. strain components).
       const ComponentMask volumetric_compositions = get_volumetric_composition_mask();
 
+      std::vector<double> average_elastic_shear_moduli (in.temperature.size());
+      std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
       // Loop through all requested points
@@ -635,7 +647,23 @@ namespace aspect
               // We have given the user freedom to apply alternative bounds, because in diffusion-dominated
               // creep (where n_diff=1) viscosities are stress and strain-rate independent, so the calculation
               // of compositional field viscosities is consistent with any averaging scheme.
-              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+              //out.viscosities[i] = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+
+              // Average viscosity and shear modulus
+              const double average_viscosity = MaterialUtilities::average_value(volume_fractions, calculate_viscosities.first, viscosity_averaging);
+              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, MaterialUtilities::maximum_composition);
+
+              // Average viscoelastic (e.g., effective) viscosity (equation 28 in Moresi et al., 2003, J. Comp. Phys.)
+              out.viscosities[i] = elastic_rheology.calculate_viscoelastic_viscosity(average_viscosity,
+                                                                                     average_elastic_shear_moduli[i]);
+
+              // Fill the material properties that are part of the elastic additional outputs
+              if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
+                {
+                  elastic_out->elastic_shear_moduli[i] = average_elastic_shear_moduli[i];
+                }
+
+
 
               // Decide based on the maximum composition if material is yielding.
               // This avoids for example division by zero for harmonic averaging (as plastic_yielding
@@ -651,30 +679,29 @@ namespace aspect
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
-          //for (unsigned int c=0; c<in.composition[i].size(); ++c)
-          //  out.reaction_terms[i][c] = 0.0;
-
-          // Now compute changes in the compositional fields (i.e. the accumulated strain).
-          const std::vector<double> &composition = in.composition[i];
-          const double depth = this->get_geometry_model().depth(in.position[i]);
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
-            {
-              double delta_C = 0.0;
-              switch (c)
-                {
-                  case 0:
-                    if (depth < reaction_depth) delta_C = -composition[0];
-                    break;
-                  case 1:
-                    if (depth < reaction_depth) delta_C = composition[0];
-                    break;
-                  default:
-                    delta_C = 0.0;
-                    break;
-                }
-              out.reaction_terms[i][c] = delta_C;
-             }
+            out.reaction_terms[i][c] = 0.0;
 
+          // Do the reaction depth bit.
+          //const std::vector<double> &composition = in.composition[i];
+          //const double depth = this->get_geometry_model().depth(in.position[i]);
+          //for (unsigned int c=0; c<in.composition[i].size(); ++c)
+          //  {
+          //    double delta_C = 0.0;
+          //    switch (c)
+          //      {
+          //        case 0:
+          //          if (depth < reaction_depth) delta_C = -composition[0];
+          //          break;
+          //        case 1:
+          //          if (depth < reaction_depth) delta_C = composition[0];
+          //          break;
+          //        default:
+          //          delta_C = 0.0;
+          //          break;
+          //      }
+          //    out.reaction_terms[i][c] = delta_C;
+          //   }
 
 
           // If strain weakening is used, overwrite the first reaction term,
@@ -738,6 +765,10 @@ namespace aspect
       if (in.current_cell.state() == IteratorState::valid && weakening_mechanism == finite_strain_tensor
           && this->get_timestep_number() > 0 && in.strain_rate.size())
         compute_finite_strain_reaction_terms(in, out);
+
+      //same like ve_p
+      elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
+      elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
     }
 
     template <int dim>
@@ -772,6 +803,7 @@ namespace aspect
         prm.enter_subsection ("Visco Plastic");
         {
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
+          Rheology::Elasticity<dim>::declare_parameters (prm);
 
           // Reference and minimum/maximum values
           prm.declare_entry ("Reference temperature", "293", Patterns::Double(0),
@@ -901,7 +933,6 @@ namespace aspect
                              "``Strain weakening mechanism'' parameter, which has the same functionality. "
                              "This parameter is deprecated; please use ``Strain weakening mechanism'' "
                              "instead!");
-
           prm.declare_entry ("Healing rate", "0", Patterns::Double (0),
                              "Plastic strain healing rate "
                              "Units: $1/s$.");
@@ -1064,10 +1095,11 @@ namespace aspect
                              "Using a pressure gradient of 32436 Pa/m, then a value of "
                              "0.3 $K/km$ = 0.0003 $K/m$ = 9.24e-09 $K/Pa$ gives an earth-like adiabat."
                              "Units: $K/Pa$");
-           prm.declare_entry ("Reaction depth", "0", Patterns::Double (0),
-                    "Above this depth the compositional fields react: "
-                    "The first field gets converted to the second field. "
-         "Units: $m$.");
+          prm.declare_entry ("Reaction depth", "0", Patterns::Double (0),
+                             "Above this depth the compositional fields react: "
+                             "The first field gets converted to the second field. "
+                             "Units: $m$.");
+
         }
         prm.leave_subsection();
       }
@@ -1090,6 +1122,12 @@ namespace aspect
       {
         prm.enter_subsection ("Visco Plastic");
         {
+
+
+          // Equation of state parameters
+          elastic_rheology.initialize_simulator (this->get_simulator());
+          elastic_rheology.parse_parameters(prm);
+
           // Equation of state parameters
           equation_of_state.initialize_simulator (this->get_simulator());
           equation_of_state.parse_parameters (prm);
@@ -1101,7 +1139,6 @@ namespace aspect
           min_visc = prm.get_double ("Minimum viscosity");
           max_visc = prm.get_double ("Maximum viscosity");
           ref_visc = prm.get_double ("Reference viscosity");
-          reaction_depth = prm.get_double ("Reaction depth");
           healing_rate = prm.get_double ("Healing rate");
           reaction_depth = prm.get_double ("Reaction depth");
           healing_strain_limit = prm.get_double ("Healing strain limit");
@@ -1372,6 +1409,7 @@ namespace aspect
     void
     ViscoPlastic<dim>::create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const
     {
+      elastic_rheology.create_elastic_outputs(out); //this line added by dan
       if (out.template get_additional_output<PlasticAdditionalOutputs<dim> >() == nullptr)
         {
           const unsigned int n_points = out.viscosities.size();
