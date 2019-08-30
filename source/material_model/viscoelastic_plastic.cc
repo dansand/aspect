@@ -91,17 +91,6 @@ namespace aspect
 
           if (in.strain_rate.size())
             {
-              // Calculate the square root of the second moment invariant for the deviatoric strain rate tensor.
-              // The first time this function is called (first iteration of first time step)
-              // a specified "reference" strain rate is used as the returned value would
-              // otherwise be zero.
-              const double edot_ii = ( (this->get_timestep_number() == 0 && strain_rate.norm() <= std::numeric_limits<double>::min() )
-                                       ?
-                                       reference_strain_rate
-                                       :
-                                       std::max(std::sqrt(std::fabs(second_invariant(deviator(strain_rate)))),
-                                                minimum_strain_rate) );
-
               const std::vector<double> viscosities_pre_yield = linear_viscosities;
 
               // TODO: Add strain-weakening of cohesion and friction
@@ -113,14 +102,25 @@ namespace aspect
               std::vector<double> stresses_yield(volume_fractions.size());
               std::vector<double> viscosities_viscoplastic(volume_fractions.size());
               std::vector<double> viscosities_viscoelastic(volume_fractions.size());
+              std::vector<double> stresses_vep(volume_fractions.size());
+              std::vector<double> viscosities_vep(volume_fractions.size());
 
               // Loop through all compositions
               for (unsigned int j=0; j < volume_fractions.size(); ++j)
                 {
 
-                  // Note that edot_ii is the full computed strain rate, which includes elastic stresses
-                  stresses_viscous[j] = 2. * viscosities_pre_yield[j] * edot_ii;
+                  // Get old stresses from compositional fields
+                  SymmetricTensor<2,dim> stress_old;
+                  for (unsigned int j=0; j < SymmetricTensor<2,dim>::n_independent_components; ++j)
+                    stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = in.composition[i][j];
 
+                  // Step 1: Define an effective viscoleastic viscosity
+                  viscosities_vep[j] = viscosities_pre_yield[j] * dte / (dte + (viscosities_pre_yield[j]/elastic_shear_moduli[j]));
+
+                  // Step 2: Calculate viscous stress tensor
+                  stresses_vep[j] = std::sqrt(std::fabs(second_invariant( viscosities_pre_yield[j] * (2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+
+                  // Step 3: Calculate yield stress
                   stresses_yield[j] = ( (dim==3)
                                         ?
                                         ( 6.0 * coh[j] * std::cos(phi[j]) + 6.0 * std::max(pressure,0.0) * std::sin(phi[j]) )
@@ -130,21 +130,19 @@ namespace aspect
 
                   // If the viscous stress is greater than the yield strength, rescale the viscosity back to yield surface.
                   // If the viscous stress is less than the yield stress, the yield viscosity is equal to the pre-yield value.
-                  if ( stresses_viscous[j] >= stresses_yield[j]  )
+                  if ( stresses_vep[j] >= stresses_yield[j]  )
                     {
-                      viscosities_viscoplastic[j] = stresses_yield[j] / (2.0 * edot_ii);
+                      viscosities_viscoplastic[j] = stresses_yield[j] / 
+                                                    std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) );
                     }
                   else
                     {
-                      viscosities_viscoplastic[j] = viscosities_pre_yield[j];
+                      viscosities_viscoplastic[j] = viscosities_vep[j];
                     }
-
-
-                  viscosities_viscoelastic[j] = ( viscosities_viscoplastic[j] * dte ) / ( dte + ( viscosities_viscoplastic[j] / elastic_shear_moduli[j] ) );
 
                 }
 
-              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions,viscosities_viscoelastic,viscosity_averaging);
+              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions,viscosities_vep,viscosity_averaging);
 
               if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
                 {
