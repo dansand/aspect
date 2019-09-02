@@ -118,7 +118,7 @@ namespace aspect
                   viscosities_vep[j] = viscosities_pre_yield[j] * dte / (dte + (viscosities_pre_yield[j]/elastic_shear_moduli[j]));
 
                   // Step 2: Calculate viscous stress tensor
-                  stresses_vep[j] = std::sqrt(std::fabs(second_invariant( viscosities_pre_yield[j] * (2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+                  stresses_vep[j] = viscosities_vep[j] * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
 
                   // Step 3: Calculate yield stress
                   stresses_yield[j] = ( (dim==3)
@@ -142,7 +142,7 @@ namespace aspect
 
                 }
 
-              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions,viscosities_vep,viscosity_averaging);
+              out.viscosities[i] = MaterialUtilities::average_value(volume_fractions,viscosities_viscoplastic,viscosity_averaging);
 
               if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
                 {
