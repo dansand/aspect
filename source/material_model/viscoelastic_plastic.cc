@@ -97,10 +97,10 @@ namespace aspect
           // otherwise be zero.
           const double edot_ii = ( (this->get_timestep_number() == 0 && strain_rate.norm() <= std::numeric_limits<double>::min())
                                    ?
-                                   ref_strain_rate
+                                   reference_strain_rate
                                    :
                                    std::max(std::sqrt(std::fabs(second_invariant(deviator(strain_rate)))),
-                                            min_strain_rate) );
+                                            minimum_strain_rate) );
 
           // Choice of activation volume depends on whether there is an adiabatic temperature
           // gradient used when calculating the viscosity. This allows the same activation volume
