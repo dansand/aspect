@@ -28,6 +28,8 @@
 #include <aspect/adiabatic_conditions/interface.h>
 
 
+
+
 namespace aspect
 {
   namespace MaterialModel
@@ -108,14 +110,7 @@ namespace aspect
           // gradient used when calculating the viscosity. This allows the same activation volume
           // to be used in incompressible and compressible models.
           const double temperature_for_viscosity = temperature + adiabatic_temperature_gradient_for_viscosity*pressure;
-          Assert(temperature_for_viscosity != 0, ExcMessage(
-                   "The temperature used in the calculation of the visco-plastic rheology is zero. "
-                   "This is not allowed, because this value is used to divide through. It is probably "
-                   "being caused by the temperature being zero somewhere in the model. The relevant "
-                   "values for debugging are: temperature (" + Utilities::to_string(temperature) +
-                   "), adiabatic_temperature_gradient_for_viscosity ("
-                   + Utilities::to_string(adiabatic_temperature_gradient_for_viscosity) + ") and pressure ("
-                   + Utilities::to_string(pressure) + ")."));
+
 
 
           if (in.strain_rate.size())
@@ -476,11 +471,11 @@ namespace aspect
 
           // Include an adiabat temperature gradient in flow laws
           adiabatic_temperature_gradient_for_viscosity = prm.get_double("Adiabat temperature gradient for viscosity");
-          if (this->get_heating_model_manager().adiabatic_heating_enabled())
-            AssertThrow (adiabatic_temperature_gradient_for_viscosity == 0.0,
-                         ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
-                                    "to the temperature for computing the viscosity, because the ambient"
-                                    "temperature profile already includes the adiabatic gradient."));
+          //if (this->get_heating_model_manager().adiabatic_heating_enabled())
+          //  AssertThrow (adiabatic_temperature_gradient_for_viscosity == 0.0,
+          //               ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
+          //                          "to the temperature for computing the viscosity, because the ambient"
+          //                          "temperature profile already includes the adiabatic gradient."));
 
 
 
