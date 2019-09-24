@@ -288,7 +288,15 @@ namespace aspect
         /**
          * temperature gradient added to temperature used in the flow law.
          */
-        double adiabatic_temperature_gradient_for_viscosity
+        double adiabatic_temperature_gradient_for_viscosity;
+
+        Rheology::StrainDependent<dim> strain_rheology;
+
+        /**
+         * Objects for computing viscous creep viscosities.
+         */
+        Rheology::DiffusionCreep<dim> diffusion_creep;
+        Rheology::DislocationCreep<dim> dislocation_creep;
 
         /**
          * Vector for field thermal conductivities, read from parameter file.
