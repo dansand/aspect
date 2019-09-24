@@ -90,6 +90,18 @@ namespace aspect
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
             out.reaction_terms[i][c] = 0.0;
 
+
+          // Calculate the square root of the second moment invariant for the deviatoric strain rate tensor.
+          // The first time this function is called (first iteration of first time step)
+          // a specified "reference" strain rate is used as the returned value would
+          // otherwise be zero.
+          const double edot_ii = ( (this->get_timestep_number() == 0 && strain_rate.norm() <= std::numeric_limits<double>::min())
+                                   ?
+                                   ref_strain_rate
+                                   :
+                                   std::max(std::sqrt(std::fabs(second_invariant(deviator(strain_rate)))),
+                                            min_strain_rate) );
+
           // Choice of activation volume depends on whether there is an adiabatic temperature
           // gradient used when calculating the viscosity. This allows the same activation volume
           // to be used in incompressible and compressible models.
@@ -189,6 +201,7 @@ namespace aspect
                   // If the viscous stress is less than the yield stress, the yield viscosity is equal to the pre-yield value.
                   if ( stresses_vep[j] >= stresses_yield[j]  )
                     {
+                      // the terms inside the second_invariant function are an `effective strain rate (Moresi, 2003)
                       viscosities_viscoplastic[j] = stresses_yield[j] /
                                                     std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) );
                     }
