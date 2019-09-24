@@ -25,6 +25,8 @@
 #include <deal.II/base/quadrature_lib.h>
 #include <numeric>
 #include <deal.II/base/signaling_nan.h>
+#include <aspect/adiabatic_conditions/interface.h>
+
 
 namespace aspect
 {
