@@ -454,6 +454,11 @@ namespace aspect
           maximum_viscosity = prm.get_double ("Maximum viscosity");
           input_reference_viscosity = prm.get_double ("Reference viscosity");
 
+
+          thermal_diffusivities = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Thermal diffusivities"))),
+                                                                          n_fields,
+                                                                          "Thermal diffusivities");
+
           viscosity_averaging = MaterialUtilities::parse_compositional_averaging_operation ("Viscosity averaging scheme",
                                 prm);
 
@@ -467,6 +472,15 @@ namespace aspect
             viscous_flow_law = dislocation;
           else
             AssertThrow(false, ExcMessage("Not a valid viscous flow law"));
+
+          // Rheological parameters
+          // Diffusion creep parameters
+          diffusion_creep.initialize_simulator (this->get_simulator());
+          diffusion_creep.parse_parameters(prm);
+
+          // Dislocation creep parameters
+          dislocation_creep.initialize_simulator (this->get_simulator());
+          dislocation_creep.parse_parameters(prm);
 
 
           // Include an adiabat temperature gradient in flow laws

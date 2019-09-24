@@ -303,6 +303,9 @@ namespace aspect
          */
         std::vector<double> thermal_conductivities;
 
+
+        std::vector<double> thermal_diffusivities;
+
         /**
          * Vector for field linear (fixed) viscosities, read from parameter file.
          */
