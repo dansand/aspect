@@ -275,6 +275,17 @@ namespace aspect
         EquationOfState::MulticomponentIncompressible<dim> equation_of_state;
 
         /**
+         * Enumeration for selecting which type of viscous flow law to use.
+         * Select between diffusion, dislocation or composite.
+         */
+        enum ViscosityScheme
+        {
+          diffusion,
+          dislocation,
+          composite
+        } viscous_flow_law;
+
+        /**
          * Vector for field thermal conductivities, read from parameter file.
          */
         std::vector<double> thermal_conductivities;

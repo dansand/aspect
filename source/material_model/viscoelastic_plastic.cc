@@ -66,6 +66,7 @@ namespace aspect
         {
           const std::vector<double> composition = in.composition[i];
           const double pressure = in.pressure[i];
+          const double temperature = in.temperature[i];
           const SymmetricTensor<2,dim> strain_rate = in.strain_rate[i];
           const std::vector<double> volume_fractions = MaterialUtilities::compute_volume_fractions(composition, composition_mask);
 
@@ -88,6 +89,20 @@ namespace aspect
 
           for (unsigned int c=0; c<in.composition[i].size(); ++c)
             out.reaction_terms[i][c] = 0.0;
+
+          // Choice of activation volume depends on whether there is an adiabatic temperature
+          // gradient used when calculating the viscosity. This allows the same activation volume
+          // to be used in incompressible and compressible models.
+          const double temperature_for_viscosity = temperature + adiabatic_temperature_gradient_for_viscosity*pressure;
+          Assert(temperature_for_viscosity != 0, ExcMessage(
+                   "The temperature used in the calculation of the visco-plastic rheology is zero. "
+                   "This is not allowed, because this value is used to divide through. It is probably "
+                   "being caused by the temperature being zero somewhere in the model. The relevant "
+                   "values for debugging are: temperature (" + Utilities::to_string(temperature) +
+                   "), adiabatic_temperature_gradient_for_viscosity ("
+                   + Utilities::to_string(adiabatic_temperature_gradient_for_viscosity) + ") and pressure ("
+                   + Utilities::to_string(pressure) + ")."));
+
 
           if (in.strain_rate.size())
             {
@@ -116,6 +131,7 @@ namespace aspect
 
                   // Select what form of viscosity to use (diffusion, dislocation or composite)
                   double viscosity_pre_yield = 0.0;
+                  //viscous_flow_law is and enum
                   switch (viscous_flow_law)
                     {
                       case diffusion:
