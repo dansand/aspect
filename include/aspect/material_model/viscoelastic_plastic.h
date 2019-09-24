@@ -286,6 +286,11 @@ namespace aspect
         } viscous_flow_law;
 
         /**
+         * temperature gradient added to temperature used in the flow law.
+         */
+        double adiabatic_temperature_gradient_for_viscosity
+
+        /**
          * Vector for field thermal conductivities, read from parameter file.
          */
         std::vector<double> thermal_conductivities;

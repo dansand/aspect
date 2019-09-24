@@ -459,6 +459,15 @@ namespace aspect
             AssertThrow(false, ExcMessage("Not a valid viscous flow law"));
 
 
+          // Include an adiabat temperature gradient in flow laws
+          adiabatic_temperature_gradient_for_viscosity = prm.get_double("Adiabat temperature gradient for viscosity");
+          if (this->get_heating_model_manager().adiabatic_heating_enabled())
+            AssertThrow (adiabatic_temperature_gradient_for_viscosity == 0.0,
+                         ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
+                                    "to the temperature for computing the viscosity, because the ambient"
+                                    "temperature profile already includes the adiabatic gradient."));
+
+
 
           // Plasticity parameters
           angles_internal_friction = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Angles of internal friction"))),
