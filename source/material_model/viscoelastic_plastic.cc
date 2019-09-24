@@ -330,6 +330,15 @@ namespace aspect
           // Equation of state parameters
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
 
+          Rheology::StrainDependent<dim>::declare_parameters (prm);
+
+
+          // Diffusion creep parameters
+          Rheology::DiffusionCreep<dim>::declare_parameters(prm);
+
+          // Dislocation creep parameters
+          Rheology::DislocationCreep<dim>::declare_parameters(prm);
+
           // Equation of state parameters
           prm.declare_entry ("Thermal diffusivities", "0.8e-6",
                              Patterns::List(Patterns::Double(0)),
@@ -407,11 +416,6 @@ namespace aspect
                              "The extremely large default cohesion value (1e20 Pa) prevents the viscous stress from "
                              "exceeding the yield stress. Units: $Pa$.");
 
-                             // Diffusion creep parameters
-                             Rheology::DiffusionCreep<dim>::declare_parameters(prm);
-
-                             // Dislocation creep parameters
-                             Rheology::DislocationCreep<dim>::declare_parameters(prm);
 
           // Viscoelasticity parameters
           prm.declare_entry ("Elastic shear moduli", "75.0e9",
