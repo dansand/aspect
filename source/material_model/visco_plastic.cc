@@ -701,11 +701,11 @@ namespace aspect
 
           // Include an adiabat temperature gradient in flow laws
           adiabatic_temperature_gradient_for_viscosity = prm.get_double("Adiabat temperature gradient for viscosity");
-          if (this->get_heating_model_manager().adiabatic_heating_enabled())
-            AssertThrow (adiabatic_temperature_gradient_for_viscosity == 0.0,
-                         ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
-                                    "to the temperature for computing the viscosity, because the ambient"
-                                    "temperature profile already includes the adiabatic gradient."));
+          //if (this->get_heating_model_manager().adiabatic_heating_enabled())
+          //  AssertThrow (adiabatic_temperature_gradient_for_viscosity == 0.0,
+          //               ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
+          //                          "to the temperature for computing the viscosity, because the ambient"
+          //                          "temperature profile already includes the adiabatic gradient."));
 
 
         }
