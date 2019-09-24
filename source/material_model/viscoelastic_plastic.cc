@@ -330,6 +330,13 @@ namespace aspect
           // Equation of state parameters
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
 
+          // Equation of state parameters
+          prm.declare_entry ("Thermal diffusivities", "0.8e-6",
+                             Patterns::List(Patterns::Double(0)),
+                             "List of thermal diffusivities, for background material and compositional fields, "
+                             "for a total of N+1 values, where N is the number of compositional fields. "
+                             "If only one value is given, then all use the same value.  Units: $m^2/s$");
+
           // Reference and minimum/maximum values
           prm.declare_entry ("Reference temperature", "293",
                              Patterns::Double (0),
@@ -380,6 +387,11 @@ namespace aspect
                              "List of linear (fixed) viscosities for background material and compositional fields, "
                              "for a total of N+1 values, where N is the number of compositional fields. "
                              "If only one value is given, then all use the same value. Units: $Pa s$");
+          prm.declare_entry ("Viscous flow law", "composite",
+                             Patterns::Selection("diffusion|dislocation|composite"),
+                             "Select what type of viscosity law to use between diffusion, "
+                             "dislocation and composite options. Soon there will be an option "
+                             "to select a specific flow law for each assigned composition ");
 
           // Plasticity parameters
           prm.declare_entry ("Angles of internal friction", "0",
@@ -394,6 +406,12 @@ namespace aspect
                              "for a total of N+1 values, where N is the number of compositional fields. "
                              "The extremely large default cohesion value (1e20 Pa) prevents the viscous stress from "
                              "exceeding the yield stress. Units: $Pa$.");
+
+                             // Diffusion creep parameters
+                             Rheology::DiffusionCreep<dim>::declare_parameters(prm);
+
+                             // Dislocation creep parameters
+                             Rheology::DislocationCreep<dim>::declare_parameters(prm);
 
           // Viscoelasticity parameters
           prm.declare_entry ("Elastic shear moduli", "75.0e9",
