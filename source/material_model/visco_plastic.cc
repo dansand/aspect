@@ -292,7 +292,7 @@ namespace aspect
                                   const MaterialModel::MaterialModelInputs<dim> &in,
                                   MaterialModel::MaterialModelOutputs<dim> &out,
                                   const std::vector<double> &elastic_shear_moduli_vector,
-                                  const double &elastic_timestep) const;
+                                  const double &elastic_timestep) const
     {
       MaterialModel::MaterialModelDerivatives<dim> *derivatives =
         out.template get_additional_output<MaterialModel::MaterialModelDerivatives<dim> >();

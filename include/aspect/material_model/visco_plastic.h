@@ -171,7 +171,7 @@ namespace aspect
                       const std::vector<double> &composition,
                       const SymmetricTensor<2,dim> &strain_rate,
                       const std::vector<double> &elastic_shear_moduli_vector,
-                      const double &elastic_timestep) const) const;
+                      const double &elastic_timestep) const;
 
       private:
 
@@ -222,7 +222,7 @@ namespace aspect
                                           const ViscosityScheme &viscous_type,
                                           const YieldScheme &yield_type,
                                           const std::vector<double> &elastic_shear_moduli_vector,
-                                          const double &elastic_timestep) const);
+                                          const double &elastic_timestep) const;
 
 
         /**
@@ -245,7 +245,9 @@ namespace aspect
                                            const std::vector<double> &volume_fractions,
                                            const std::vector<double> &composition_viscosities,
                                            const MaterialModel::MaterialModelInputs<dim> &in,
-                                           MaterialModel::MaterialModelOutputs<dim> &out) const;
+                                           MaterialModel::MaterialModelOutputs<dim> &out,
+                                           const std::vector<double> &elastic_shear_moduli_vector,
+                                           const double &elastic_timestep) const;
 
 
         /**
