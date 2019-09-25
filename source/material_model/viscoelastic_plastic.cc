@@ -88,7 +88,13 @@ namespace aspect
                                        std::max(std::sqrt(std::fabs(second_invariant(deviator(strain_rate)))),
                                                 minimum_strain_rate) );
 
-              const std::vector<double> viscosities_pre_yield = linear_viscosities;
+              //const std::vector<double> viscosities_pre_yield = linear_viscosities;
+              // Loop through all compositions
+              std::vector<double> viscosities_pre_yield(volume_fractions.size())
+              for (unsigned int j=0; j < volume_fractions.size(); ++j)
+                {
+                  viscosities_pre_yield[j] = diffusion_creep.compute_viscosity(in.pressure[i], in.temperature[i], j);
+                }
 
               // TODO: Add strain-weakening of cohesion and friction
               const std::vector<double> coh = cohesions;
@@ -105,6 +111,7 @@ namespace aspect
                 {
 
                   // Note that edot_ii is the full computed strain rate, which includes elastic stresses
+
                   stresses_viscous[j] = 2. * viscosities_pre_yield[j] * edot_ii;
 
                   stresses_yield[j] = ( (dim==3)
@@ -124,6 +131,12 @@ namespace aspect
                     {
                       viscosities_viscoplastic[j] = viscosities_pre_yield[j];
                     }
+
+                  //apply limits at the end
+                  viscosities_viscoplastic[j] = std::min(std::max(viscosities_viscoplastic[j], minimum_viscosity), maximum_viscosity);
+
+
+
                 }
 
               // Average viscosity and shear modulus
@@ -173,6 +186,9 @@ namespace aspect
           // Equation of state parameters
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
           Rheology::Elasticity<dim>::declare_parameters (prm);
+
+          // Diffusion creep parameters
+          Rheology::DiffusionCreep<dim>::declare_parameters(prm);
 
           // Reference and minimum/maximum values
           prm.declare_entry ("Minimum strain rate", "1.0e-20", Patterns::Double(0),
