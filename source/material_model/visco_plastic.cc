@@ -396,6 +396,10 @@ namespace aspect
       // Store which components to exclude during the volume fraction computation.
       ComponentMask strain_mask = strain_rheology.get_strain_composition_mask();
 
+      // this is masking the compositional fields related to the stress
+      for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+        strain_mask.set(i,false);
+
       return strain_mask;
     }
 
@@ -410,10 +414,7 @@ namespace aspect
       // Store which components do not represent volumetric compositions (e.g. strain components).
       const ComponentMask volumetric_compositions = get_volumetric_composition_mask();
 
-      // assign compositional fields associated with viscoelastic stress a value of 0
-      // assume these fields are listed first
-      for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
-        volumetric_compositions.set(i,false);
+
 
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
