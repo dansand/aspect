@@ -140,7 +140,7 @@ namespace aspect
 
                   // Select what form of viscosity to use (diffusion, dislocation or composite)
                   double viscosity_pre_yield = 0.0;
-                  //viscous_flow_law is and enum
+                  //viscous_flow_law is an enum
                   switch (viscous_flow_law)
                     {
                       case diffusion:
@@ -164,6 +164,9 @@ namespace aspect
                         break;
                       }
                     }
+
+                  //add viscosity limiters at this point??
+                  viscosity_pre_yield = std::min(std::max(viscosity_pre_yield, minimum_viscosity), maximum_viscosity);
 
                   // Get old stresses from compositional fields
                   SymmetricTensor<2,dim> stress_old;
