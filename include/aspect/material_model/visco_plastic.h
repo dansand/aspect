@@ -26,6 +26,7 @@
 #include <aspect/simulator_access.h>
 #include <aspect/material_model/rheology/diffusion_creep.h>
 #include <aspect/material_model/rheology/dislocation_creep.h>
+#include <aspect/material_model/rheology/elasticity.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
 
 #include<deal.II/fe/component_mask.h>
@@ -168,7 +169,9 @@ namespace aspect
         is_yielding ( const double &pressure,
                       const double &temperature,
                       const std::vector<double> &composition,
-                      const SymmetricTensor<2,dim> &strain_rate) const;
+                      const SymmetricTensor<2,dim> &strain_rate,
+                      const std::vector<double> &elastic_shear_moduli_vector,
+                      const double &elastic_timestep) const) const;
 
       private:
 
@@ -217,7 +220,9 @@ namespace aspect
                                           const std::vector<double> &composition,
                                           const SymmetricTensor<2,dim> &strain_rate,
                                           const ViscosityScheme &viscous_type,
-                                          const YieldScheme &yield_type) const;
+                                          const YieldScheme &yield_type,
+                                          const std::vector<double> &elastic_shear_moduli_vector,
+                                          const double &elastic_timestep) const);
 
 
         /**
@@ -272,6 +277,8 @@ namespace aspect
          */
         Rheology::DiffusionCreep<dim> diffusion_creep;
         Rheology::DislocationCreep<dim> dislocation_creep;
+
+        Rheology::Elasticity<dim> elastic_rheology;
     };
 
   }

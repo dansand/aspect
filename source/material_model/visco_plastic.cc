@@ -48,7 +48,9 @@ namespace aspect
     is_yielding (const double &pressure,
                  const double &temperature,
                  const std::vector<double> &composition,
-                 const SymmetricTensor<2,dim> &strain_rate) const
+                 const SymmetricTensor<2,dim> &strain_rate,
+                 const std::vector<double> &elastic_shear_moduli_vector,
+                 const double &elastic_timestep) const
     {
       /* The following returns whether or not the material is plastically yielding
        * as documented in evaluate.
@@ -58,7 +60,17 @@ namespace aspect
       const std::vector<double> volume_fractions = MaterialUtilities::compute_volume_fractions(composition, get_volumetric_composition_mask());
 
       const std::pair<std::vector<double>, std::vector<bool> > calculate_viscosities =
-        calculate_isostrain_viscosities(volume_fractions, pressure, temperature, composition, strain_rate, viscous_flow_law, yield_mechanism);
+        calculate_isostrain_viscosities(volume_fractions,
+                                        pressure,
+                                        temperature,
+                                        composition,
+                                        strain_rate,
+                                        viscous_flow_law,
+                                        yield_mechanism,
+                                        elastic_shear_moduli_vector,
+                                        elastic_timestep);
+
+
 
       std::vector<double>::const_iterator max_composition = std::max_element(volume_fractions.begin(),volume_fractions.end());
       plastic_yielding = calculate_viscosities.second[std::distance(volume_fractions.begin(),max_composition)];
@@ -98,7 +110,8 @@ namespace aspect
       return cohesions;
     }
 
-
+    //std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
+    //const double dte elastic_rheology.elastic_timestep()
 
     template <int dim>
     std::pair<std::vector<double>, std::vector<bool> >
@@ -109,7 +122,9 @@ namespace aspect
                                      const std::vector<double> &composition,
                                      const SymmetricTensor<2,dim> &strain_rate,
                                      const ViscosityScheme &viscous_type,
-                                     const YieldScheme &yield_type) const
+                                     const YieldScheme &yield_type,
+                                     const std::vector<double> &elastic_shear_moduli_vector,
+                                     const double &elastic_timestep) const
     {
       // This function calculates viscosities assuming that all the compositional fields
       // experience the same strain rate (isostrain).
@@ -275,7 +290,9 @@ namespace aspect
                                   const std::vector<double> &volume_fractions,
                                   const std::vector<double> &composition_viscosities,
                                   const MaterialModel::MaterialModelInputs<dim> &in,
-                                  MaterialModel::MaterialModelOutputs<dim> &out) const
+                                  MaterialModel::MaterialModelOutputs<dim> &out,
+                                  const std::vector<double> &elastic_shear_moduli_vector,
+                                  const double &elastic_timestep) const;
     {
       MaterialModel::MaterialModelDerivatives<dim> *derivatives =
         out.template get_additional_output<MaterialModel::MaterialModelDerivatives<dim> >();
@@ -301,7 +318,7 @@ namespace aspect
                 calculate_isostrain_viscosities(volume_fractions, in.pressure[i],
                                                 in.temperature[i], in.composition[i],
                                                 strain_rate_difference,
-                                                viscous_flow_law,yield_mechanism).first;
+                                                viscous_flow_law,yield_mechanism, elastic_shear_moduli_vector, elastic_timestep).first;
 
               // For each composition of the independent component, compute the derivative.
               for (unsigned int composition_index = 0; composition_index < eta_component.size(); ++composition_index)
@@ -326,7 +343,7 @@ namespace aspect
           const std::vector<double> viscosity_difference =
             calculate_isostrain_viscosities(volume_fractions, pressure_difference,
                                             in.temperature[i], in.composition[i], in.strain_rate[i],
-                                            viscous_flow_law, yield_mechanism).first;
+                                            viscous_flow_law, yield_mechanism, elastic_shear_moduli_vector, elastic_timestep).first;
 
 
           for (unsigned int composition_index = 0; composition_index < viscosity_difference.size(); ++composition_index)
@@ -393,6 +410,11 @@ namespace aspect
       // Store which components do not represent volumetric compositions (e.g. strain components).
       const ComponentMask volumetric_compositions = get_volumetric_composition_mask();
 
+      // assign compositional fields associated with viscoelastic stress a value of 0
+      // assume these fields are listed first
+      for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+        volumetric_compositions.set(i,false);
+
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
 
       // Loop through all requested points
@@ -429,6 +451,14 @@ namespace aspect
           out.entropy_derivative_pressure[i] = MaterialUtilities::average_value (volume_fractions, eos_outputs.entropy_derivative_pressure, MaterialUtilities::arithmetic);
           out.entropy_derivative_temperature[i] = MaterialUtilities::average_value (volume_fractions, eos_outputs.entropy_derivative_temperature, MaterialUtilities::arithmetic);
 
+          //variables for elasticity
+          std::vector<double> average_elastic_shear_moduli (in.temperature.size());
+          std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
+          const double dte elastic_rheology.elastic_timestep();
+
+
+
+
           // Compute the effective viscosity if requested and retrieve whether the material is plastically yielding
           bool plastic_yielding = false;
           if (in.strain_rate.size())
@@ -438,7 +468,15 @@ namespace aspect
               // TODO: This is only consistent with viscosity averaging if the arithmetic averaging
               // scheme is chosen. It would be useful to have a function to calculate isostress viscosities.
               const std::pair<std::vector<double>, std::vector<bool> > calculate_viscosities =
-                calculate_isostrain_viscosities(volume_fractions, in.pressure[i], in.temperature[i], in.composition[i], in.strain_rate[i],viscous_flow_law,yield_mechanism);
+                calculate_isostrain_viscosities(volume_fractions,
+                                                in.pressure[i],
+                                                in.temperature[i],
+                                                in.composition[i],
+                                                in.strain_rate[i],
+                                                viscous_flow_law,
+                                                yield_mechanism,
+                                                elastic_shear_moduli,
+                                                dte);
 
               // The isostrain condition implies that the viscosity averaging should be arithmetic (see above).
               // We have given the user freedom to apply alternative bounds, because in diffusion-dominated
@@ -456,7 +494,7 @@ namespace aspect
               // Compute viscosity derivatives if they are requested
               if (MaterialModel::MaterialModelDerivatives<dim> *derivatives =
                     out.template get_additional_output<MaterialModel::MaterialModelDerivatives<dim> >())
-                compute_viscosity_derivatives(i,volume_fractions, calculate_viscosities.first, in, out);
+                compute_viscosity_derivatives(i,volume_fractions, calculate_viscosities.first, in, out, elastic_shear_moduli, dte);
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
@@ -468,6 +506,14 @@ namespace aspect
 
           // Fill plastic outputs if they exist.
           fill_plastic_outputs(i,volume_fractions,plastic_yielding,in,out);
+
+
+          elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
+          elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
+
+
+
+
         }
 
       // If we use the full strain tensor, compute the change in the individual tensor components.
@@ -508,6 +554,7 @@ namespace aspect
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
 
           Rheology::StrainDependent<dim>::declare_parameters (prm);
+          Rheology::Elasticity<dim>::declare_parameters (prm);
 
           // Reference and minimum/maximum values
           prm.declare_entry ("Reference temperature", "293", Patterns::Double(0),
@@ -638,6 +685,9 @@ namespace aspect
           strain_rheology.initialize_simulator (this->get_simulator());
           strain_rheology.parse_parameters(prm);
 
+          elastic_rheology.initialize_simulator (this->get_simulator());
+          elastic_rheology.parse_parameters(prm);
+
           // Reference and minimum/maximum values
           reference_T = prm.get_double("Reference temperature");
           min_strain_rate = prm.get_double("Minimum strain rate");
@@ -725,6 +775,7 @@ namespace aspect
     void
     ViscoPlastic<dim>::create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const
     {
+      elastic_rheology.create_elastic_outputs(out);
       if (out.template get_additional_output<PlasticAdditionalOutputs<dim> >() == nullptr)
         {
           const unsigned int n_points = out.viscosities.size();
