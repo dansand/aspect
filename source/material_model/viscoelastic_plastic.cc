@@ -90,7 +90,7 @@ namespace aspect
 
               //const std::vector<double> viscosities_pre_yield = linear_viscosities;
               // Loop through all compositions
-              std::vector<double> viscosities_pre_yield(volume_fractions.size())
+              std::vector<double> viscosities_pre_yield(volume_fractions.size());
               for (unsigned int j=0; j < volume_fractions.size(); ++j)
                 {
                   viscosities_pre_yield[j] = diffusion_creep.compute_viscosity(in.pressure[i], in.temperature[i], j);
