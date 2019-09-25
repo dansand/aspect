@@ -455,7 +455,7 @@ namespace aspect
           //variables for elasticity
           std::vector<double> average_elastic_shear_moduli (in.temperature.size());
           std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
-          const double dte elastic_rheology.elastic_timestep();
+          const double dte = elastic_rheology.elastic_timestep();
 
 
 
