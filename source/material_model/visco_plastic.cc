@@ -197,7 +197,16 @@ namespace aspect
                                                                                  elastic_shear_moduli_vector[j]);
 
 
+          // Get old stresses from compositional fields
+          SymmetricTensor<2,dim> stress_old;
+          for (unsigned int j=0; j < SymmetricTensor<2,dim>::n_independent_components; ++j)
+            stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = composition[j];
+
+          // Calculate viscous stress tensor
+          stress_ve = viscosity_pre_yield * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) );
+
           // Second step: strain weakening
+
 
           // Calculate the strain weakening factors for cohesion, friction and viscosity. If no brittle and/or viscous strain weakening is applied, the factors are 1.
           const std::array<double, 3> weakening_factors = strain_rheology.compute_strain_weakening_factors(j, composition);
@@ -217,7 +226,11 @@ namespace aspect
           MaterialUtilities::compute_drucker_prager_yielding<dim> (plastic_in, plastic_out);
 
 
-         //now compute the elastic stress, and effective strain rate...
+         //now compute the vep viscosity
+         viscosity_vep = plastic_out.yield_strength /
+                                          (std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) + min_strain_rate);
+
+
 
 
           // If the viscous stress is greater than the yield strength, indicate we are in the yielding regime.
@@ -239,8 +252,8 @@ namespace aspect
               case drucker_prager:
               {
                 // If the viscous stress is greater than the yield strength, rescale the viscosity back to yield surface
-                if (viscous_stress >= plastic_out.yield_strength)
-                  viscosity_yield = plastic_out.plastic_viscosity;
+                if (stress_ve >= plastic_out.yield_strength)
+                  viscosity_yield = viscosity_vep;
                 break;
               }
               default:
@@ -504,6 +517,11 @@ namespace aspect
               if (MaterialModel::MaterialModelDerivatives<dim> *derivatives =
                     out.template get_additional_output<MaterialModel::MaterialModelDerivatives<dim> >())
                 compute_viscosity_derivatives(i,volume_fractions, calculate_viscosities.first, in, out, elastic_shear_moduli, dte);
+
+              // update the elastic shear moduli average
+              //elastic_shear_moduli is jus at vector of length N comp. fields. The volume fractions change at each quad point (i).
+              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, MaterialUtilities::maximum_composition;
+
             }
 
           // Now compute changes in the compositional fields (i.e. the accumulated strain).
@@ -516,7 +534,7 @@ namespace aspect
           // Fill plastic outputs if they exist.
           fill_plastic_outputs(i,volume_fractions,plastic_yielding,in,out);
 
-
+          //fill elastic outputs
           elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
           elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
 
