@@ -519,8 +519,14 @@ namespace aspect
                 compute_viscosity_derivatives(i,volume_fractions, calculate_viscosities.first, in, out, elastic_shear_moduli, dte);
 
               // update the elastic shear moduli average
-              //elastic_shear_moduli is jus at vector of length N comp. fields. The volume fractions change at each quad point (i).
+              //elastic_shear_moduli is just a vector of length N comp. fields. The volume fractions change at each quad point (i).
               average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, MaterialUtilities::maximum_composition);
+
+              // Fill the material properties that are part of the elastic additional outputs
+              if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
+                {
+                  elastic_out->elastic_shear_moduli[i] = average_elastic_shear_moduli[i];
+                }
 
             }
 
