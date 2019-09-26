@@ -520,7 +520,7 @@ namespace aspect
 
               // update the elastic shear moduli average
               //elastic_shear_moduli is jus at vector of length N comp. fields. The volume fractions change at each quad point (i).
-              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, MaterialUtilities::maximum_composition;
+              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, MaterialUtilities::maximum_composition);
 
             }
 
