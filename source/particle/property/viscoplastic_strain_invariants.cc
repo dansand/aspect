@@ -106,11 +106,14 @@ namespace aspect
         const MaterialModel::ViscoPlastic<dim> *viscoplastic
           = dynamic_cast<const MaterialModel::ViscoPlastic<dim> *>(&this->get_material_model());
 
+        //dummy vector here
+        // note that I'm supplying the composition vector as a substuturte for elastic shear moduli. Just a quick hack
         bool plastic_yielding = false;
         plastic_yielding = viscoplastic->is_yielding(solution[this->introspection().component_indices.pressure],
                                                      solution[this->introspection().component_indices.temperature],
                                                      composition,
-                                                     strain_rate);
+                                                     composition,
+                                                     dt);
 
 
         /* Next take the integrated strain invariant from the prior time step. When
