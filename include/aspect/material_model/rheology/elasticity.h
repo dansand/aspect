@@ -119,6 +119,11 @@ namespace aspect
                                             const double shear_modulus) const;
 
 
+
+          double
+          elastic_timestep () const;
+
+
         private:
           /**
            * Vector for field elastic shear moduli, read from parameter file.
@@ -147,11 +152,7 @@ namespace aspect
            */
           double fixed_elastic_time_step;
 
-          /**
-           * Compute the elastic time step.
-           */
-          double
-          elastic_timestep () const;
+
       };
     }
   }

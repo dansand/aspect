@@ -455,14 +455,7 @@ namespace aspect
           //variables for elasticity
           std::vector<double> average_elastic_shear_moduli (in.temperature.size());
           std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
-          // The elastic time step (dte) is equal to the numerical time step if the time step number
-          // is greater than 0 and the parameter 'use_fixed_elastic_time_step' is set to false.
-          const double dte = ( ( this->get_timestep_number() > 0 && use_fixed_elastic_time_step == false )
-                               ?
-                               this->get_timestep()
-                               :
-                               fixed_elastic_time_step);
-
+          const double dte = elastic_rheology.elastic_timestep();
 
 
 
