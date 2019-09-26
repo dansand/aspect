@@ -192,6 +192,10 @@ namespace aspect
               }
             }
 
+          // Another step step: visco elastic effective viscosity_yield
+          viscosity_pre_yield = elastic_rheology.calculate_viscoelastic_viscosity(viscosity_pre_yield,
+                                                                                 elastic_shear_moduli_vector[i]);
+
 
           // Second step: strain weakening
 
