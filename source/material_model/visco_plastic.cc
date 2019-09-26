@@ -194,7 +194,7 @@ namespace aspect
 
           // Another step step: visco elastic effective viscosity_yield
           viscosity_pre_yield = elastic_rheology.calculate_viscoelastic_viscosity(viscosity_pre_yield,
-                                                                                 elastic_shear_moduli_vector[i]);
+                                                                                 elastic_shear_moduli_vector[j]);
 
 
           // Second step: strain weakening
@@ -215,6 +215,10 @@ namespace aspect
           const MaterialUtilities::DruckerPragerInputs plastic_in(yield_parameters.first, yield_parameters.second, std::max(pressure,0.0), edot_ii, max_yield_strength);
           MaterialUtilities::DruckerPragerOutputs plastic_out;
           MaterialUtilities::compute_drucker_prager_yielding<dim> (plastic_in, plastic_out);
+
+
+         //now compute the elastic stress, and effective strain rate...
+
 
           // If the viscous stress is greater than the yield strength, indicate we are in the yielding regime.
           const double viscous_stress = 2. * viscosity_pre_yield * edot_ii;
