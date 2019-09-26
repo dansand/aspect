@@ -203,7 +203,7 @@ namespace aspect
             stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = composition[j];
 
           // Calculate viscous stress tensor
-          stress_ve = viscosity_pre_yield * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) );
+          const double stress_ve = viscosity_pre_yield * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) );
 
           // Second step: strain weakening
 
@@ -227,7 +227,7 @@ namespace aspect
 
 
          //now compute the vep viscosity
-         viscosity_vep = plastic_out.yield_strength /
+         const double viscosity_vep = plastic_out.yield_strength /
                                           (std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) + min_strain_rate);
 
 
