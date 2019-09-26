@@ -133,6 +133,11 @@ namespace aspect
       // The first time this function is called (first iteration of first time step)
       // a specified "reference" strain rate is used as the returned value would
       // otherwise be zero.
+
+      //DS: in order to weave in elasticity, this function needs to know about the stored stress (which we can build from composition)
+      // the shea modulus, and the elastic timestep.
+      // I have include these as function arguments, but that may not be a sensible approach.
+
       const double edot_ii = ( (this->get_timestep_number() == 0 && strain_rate.norm() <= std::numeric_limits<double>::min())
                                ?
                                ref_strain_rate
@@ -192,17 +197,17 @@ namespace aspect
               }
             }
 
-          // Another step step: visco elastic effective viscosity_yield
+          //DS:Another step step: visco elastic effective viscosity_yield
           viscosity_pre_yield = elastic_rheology.calculate_viscoelastic_viscosity(viscosity_pre_yield,
                                                                                  elastic_shear_moduli_vector[j]);
 
 
-          // Get old stresses from compositional fields
+          //DS:Get old stresses from compositional fields
           SymmetricTensor<2,dim> stress_old;
           for (unsigned int j=0; j < SymmetricTensor<2,dim>::n_independent_components; ++j)
             stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = composition[j];
 
-          // Calculate viscous stress tensor
+          //DS:Calculate visco-elastic (full) deviatoric stress invariant
           const double stress_ve = viscosity_pre_yield * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) );
 
           // Second step: strain weakening
@@ -225,7 +230,8 @@ namespace aspect
           MaterialUtilities::DruckerPragerOutputs plastic_out;
           MaterialUtilities::compute_drucker_prager_yielding<dim> (plastic_in, plastic_out);
 
-
+         //DS:Still allow compute_drucker_prager_yielding to compute the yield stress, but
+         //DS:ignore the plastic viscosity, as this needs take into account the stored stress.
          //now compute the vep viscosity
          const double viscosity_vep = plastic_out.yield_strength /
                                           (std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli_vector[j] * elastic_timestep) ) ) ) + min_strain_rate);
@@ -234,6 +240,7 @@ namespace aspect
 
 
           // If the viscous stress is greater than the yield strength, indicate we are in the yielding regime.
+          //DS: not longer the correct expression for the vep case, but can ignore for now.
           const double viscous_stress = 2. * viscosity_pre_yield * edot_ii;
           if (viscous_stress >= plastic_out.yield_strength)
             composition_yielding[j] = true;
@@ -473,7 +480,7 @@ namespace aspect
           out.entropy_derivative_pressure[i] = MaterialUtilities::average_value (volume_fractions, eos_outputs.entropy_derivative_pressure, MaterialUtilities::arithmetic);
           out.entropy_derivative_temperature[i] = MaterialUtilities::average_value (volume_fractions, eos_outputs.entropy_derivative_temperature, MaterialUtilities::arithmetic);
 
-          //variables for elasticity
+          //variables for elasticity, the name(...) format creates a copy?
           std::vector<double> average_elastic_shear_moduli (in.temperature.size());
           std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
           const double dte = elastic_rheology.elastic_timestep();
