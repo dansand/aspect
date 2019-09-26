@@ -111,6 +111,7 @@ namespace aspect
         plastic_yielding = viscoplastic->is_yielding(solution[this->introspection().component_indices.pressure],
                                                      solution[this->introspection().component_indices.temperature],
                                                      composition,
+                                                     strain_rate,
                                                      composition,
                                                      dt);
 
