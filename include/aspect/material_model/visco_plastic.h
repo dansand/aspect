@@ -28,6 +28,7 @@
 #include <aspect/material_model/rheology/dislocation_creep.h>
 #include <aspect/material_model/rheology/drucker_prager.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
+#include <aspect/material_model/rheology/elasticity.h>
 
 #include<deal.II/fe/component_mask.h>
 
@@ -274,6 +275,16 @@ namespace aspect
          * Input parameters for the drucker prager plasticity.
          */
         Rheology::DruckerPragerParameters drucker_prager_parameters;
+
+       /** 
+        * Object for computing viscoelastic viscosities and stresses.
+        */ 
+       Rheology::Elasticity<dim> elastic_rheology;
+
+      /**
+       * Whether to include viscoelasticity in the constitutive formulation.
+       */
+      bool use_elasticity;
     };
 
   }

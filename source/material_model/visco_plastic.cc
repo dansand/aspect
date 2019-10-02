@@ -141,11 +141,23 @@ namespace aspect
 
       // First step: viscous behavior
       // Calculate viscosities for each of the individual compositional phases
+      std::vector<double> elastic_shear_moduli(volume_fractions.size());
       std::vector<double> composition_viscosities(volume_fractions.size());
       std::vector<bool> composition_yielding(volume_fractions.size());
 
+      std::vector<double> viscosities_ve(volume_fractions.size());
+      std::vector<double> stresses_ve(volume_fractions.size());
+      std::vector<double> viscosities_vep(volume_fractions.size());
+      double dte = 0.;
+      SymmetricTensor<2,dim> stress_old;
       for (unsigned int j=0; j < volume_fractions.size(); ++j)
         {
+          if (use_elasticity == true)
+            {
+              elastic_shear_moduli = elastic_rheology.get_elastic_shear_moduli();
+              dte = elastic_rheology.elastic_timestep();
+            }
+
           // Compute viscosity from iffusion creep law
           const double viscosity_diffusion = diffusion_creep.compute_viscosity(pressure, temperature_for_viscosity, j);
 
@@ -178,8 +190,7 @@ namespace aspect
               }
             }
 
-
-          // Second step: strain weakening
+          // Third step step: strain weakening
 
           // Calculate the strain weakening factors for cohesion, friction and viscosity. If no brittle and/or viscous strain weakening is applied, the factors are 1.
           const std::array<double, 3> weakening_factors = strain_rheology.compute_strain_weakening_factors(j, composition);
@@ -187,6 +198,27 @@ namespace aspect
           const double current_cohesion = drucker_prager_parameters.cohesions[j] * weakening_factors[0];
           const double current_friction = drucker_prager_parameters.angles_internal_friction[j] * weakening_factors[1];
           viscosity_pre_yield *= weakening_factors[2];
+
+          const double current_cohesion = cohesions[j] * weakening_factors[0];
+          const double current_friction = angles_internal_friction[j] * weakening_factors[1];
+
+          // Weakened friction and cohesion values
+          std::pair<double, double> yield_parameters (current_cohesion, current_friction);
+
+          // Compute viscoelastic viscosities and stresses
+          if (use_elasticity == true)
+            {
+              for (unsigned int j=0; j < SymmetricTensor<2,dim>::n_independent_components; ++j)
+                stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = composition[j];
+
+              viscosities_ve[j] = viscosity_pre_yield * dte / (dte + (viscosity_pre_yield/elastic_shear_moduli[j]));
+
+              viscosity_pre_yield = viscosities_ve[j];
+ 
+              stresses_ve[j] = viscosities_ve[j] * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+            } 
+
+           viscosity_pre_yield *= weakening_factors[2];
 
           // Third step: plastic yielding
 
@@ -198,8 +230,17 @@ namespace aspect
 
           // If the viscous stress is greater than the yield stress, indicate we are in the yielding regime.
           const double viscous_stress = 2. * viscosity_pre_yield * edot_ii;
-          if (viscous_stress >= yield_stress)
-            composition_yielding[j] = true;
+
+          if (use_elasticity == false)
+            {
+              if (viscous_stress >= yield_stress)
+                composition_yielding[j] = true;
+            }
+          else
+            {
+              if (stresses_ve[j] >= yield_stress)
+                composition_yielding[j] = true;
+            }
 
           // Select if yield viscosity is based on Drucker Prager or stress limiter rheology
           double viscosity_yield = viscosity_pre_yield;
@@ -214,13 +255,22 @@ namespace aspect
               }
               case drucker_prager:
               {
-                // If the viscous stress is greater than the yield stress, rescale the viscosity back to yield surface
-                if (viscous_stress >= yield_stress)
-                  viscosity_yield = drucker_prager_plasticity.compute_viscosity(current_cohesion,
-                                                                                current_friction,
-                                                                                std::max(pressure,0.0),
-                                                                                edot_ii,
-                                                                                drucker_prager_parameters.max_yield_stress);
+                // If the viscous stress is greater than the yield strength, rescale the viscosity back to yield surface
+                if (use_elasticity == false)
+                  {
+                    if (viscous_stress >= yield_stress)
+                      viscosity_yield = drucker_prager_plasticity.compute_viscosity(current_cohesion,
+                                                                                    current_friction,
+                                                                                    std::max(pressure,0.0),
+                                                                                    edot_ii,
+                                                                                    drucker_prager_parameters.max_yield_stress);
+                  }
+                else
+                  {
+                    if (stresses_ve[j] >= yield_stress)
+                      viscosity_yield = yield_stress /
+                                        std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+                  } 
                 break;
               }
               default:
@@ -379,6 +429,12 @@ namespace aspect
       // Store which components to exclude during the volume fraction computation.
       ComponentMask strain_mask = strain_rheology.get_strain_composition_mask();
 
+      if (use_elasticity)
+        {
+          for (unsigned int i = 0; i < SymmetricTensor<2,dim>::n_independent_components ; ++i)
+            strain_mask.set(i,false);
+        }
+
       return strain_mask;
     }
 
@@ -394,6 +450,9 @@ namespace aspect
       const ComponentMask volumetric_compositions = get_volumetric_composition_mask();
 
       EquationOfStateOutputs<dim> eos_outputs (this->n_compositional_fields()+1);
+
+      std::vector<double> average_elastic_shear_moduli (in.temperature.size());
+      std::vector<double> elastic_shear_moduli(elastic_rheology.get_elastic_shear_moduli());
 
       // Loop through all requested points
       for (unsigned int i=0; i < in.temperature.size(); ++i)
@@ -468,10 +527,28 @@ namespace aspect
 
           // Fill plastic outputs if they exist.
           fill_plastic_outputs(i,volume_fractions,plastic_yielding,in,out);
+
+          if (use_elasticity)
+            {
+              // Compute average elastic shear modulus
+              average_elastic_shear_moduli[i] = MaterialUtilities::average_value(volume_fractions, elastic_shear_moduli, viscosity_averaging);
+
+              // Fill the material properties that are part of the elastic additional outputs
+              if (ElasticAdditionalOutputs<dim> *elastic_out = out.template get_additional_output<ElasticAdditionalOutputs<dim> >())
+                {
+                  elastic_out->elastic_shear_moduli[i] = average_elastic_shear_moduli[i];
+                }
+            }
         }
 
       // If we use the full strain tensor, compute the change in the individual tensor components.
       strain_rheology.compute_finite_strain_reaction_terms(in, out);
+
+      if (use_elasticity)
+        { 
+          elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
+          elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
+        }
     }
 
     template <int dim>
@@ -508,6 +585,8 @@ namespace aspect
           EquationOfState::MulticomponentIncompressible<dim>::declare_parameters (prm);
 
           Rheology::StrainDependent<dim>::declare_parameters (prm);
+
+          Rheology::Elasticity<dim>::declare_parameters (prm);
 
           // Reference and minimum/maximum values
           prm.declare_entry ("Reference temperature", "293", Patterns::Double(0),
@@ -593,6 +672,12 @@ namespace aspect
                              "Using a pressure gradient of 32436 Pa/m, then a value of "
                              "0.3 $K/km$ = 0.0003 $K/m$ = 9.24e-09 $K/Pa$ gives an earth-like adiabat."
                              "Units: $K/Pa$");
+
+        prm.declare_entry ("Include viscoelasticity","false",
+                           Patterns::Bool (),
+                           "Whether to inlcude viscoelasticity in the rheological formulation. ");
+
+
         }
         prm.leave_subsection();
       }
@@ -618,6 +703,14 @@ namespace aspect
 
           strain_rheology.initialize_simulator (this->get_simulator());
           strain_rheology.parse_parameters(prm);
+
+          use_elasticity = prm.get_bool ("Include viscoelasticity");
+
+          if (use_elasticity)
+            {
+              elastic_rheology.initialize_simulator (this->get_simulator());
+              elastic_rheology.parse_parameters(prm);
+            }
 
           // Reference and minimum/maximum values
           reference_T = prm.get_double("Reference temperature");
@@ -678,8 +771,6 @@ namespace aspect
                          ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
                                     "to the temperature for computing the viscosity, because the ambient"
                                     "temperature profile already includes the adiabatic gradient."));
-
-
         }
         prm.leave_subsection();
       }
@@ -703,6 +794,8 @@ namespace aspect
           out.additional_outputs.push_back(
             std_cxx14::make_unique<MaterialModel::PlasticAdditionalOutputs<dim>> (n_points));
         }
+      if (use_elasticity)
+         elastic_rheology.create_elastic_outputs(out);
     }
 
   }
