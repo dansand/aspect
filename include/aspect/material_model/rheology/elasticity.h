@@ -118,6 +118,11 @@ namespace aspect
           calculate_viscoelastic_viscosity (const double viscosity,
                                             const double shear_modulus) const;
 
+          /**
+           * Compute the elastic time step.
+           */
+          double
+          elastic_timestep () const;
 
         private:
           /**
@@ -147,11 +152,6 @@ namespace aspect
            */
           double fixed_elastic_time_step;
 
-          /**
-           * Compute the elastic time step.
-           */
-          double
-          elastic_timestep () const;
       };
     }
   }

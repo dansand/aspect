@@ -27,6 +27,7 @@
 #include <aspect/material_model/rheology/diffusion_creep.h>
 #include <aspect/material_model/rheology/dislocation_creep.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
+#include <aspect/material_model/rheology/elasticity.h>
 
 #include<deal.II/fe/component_mask.h>
 
@@ -272,6 +273,17 @@ namespace aspect
          */
         Rheology::DiffusionCreep<dim> diffusion_creep;
         Rheology::DislocationCreep<dim> dislocation_creep;
+
+       /** 
+        * Object for computing viscoelastic viscosities and stresses.
+        */ 
+       Rheology::Elasticity<dim> elastic_rheology;
+
+      /**
+       * Whether to include viscoelasticity in the constitutive formulation.
+       */
+      bool use_elasticity;
+
     };
 
   }
