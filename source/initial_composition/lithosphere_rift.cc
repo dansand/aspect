@@ -21,6 +21,7 @@
 
 //#include "lithosphere_rift_comp.h"
 //#include "lithosphere_rift.h"
+#include <aspect/initial_temperature/lithosphere_rift.h>
 #include <aspect/initial_composition/lithosphere_rift.h>
 #include <aspect/geometry_model/box.h>
 #include <aspect/utilities.h>
