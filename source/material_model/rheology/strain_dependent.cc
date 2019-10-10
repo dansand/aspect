@@ -142,6 +142,21 @@ namespace aspect
                            "for background material and compositional fields, "
                            "for a total of N+1 values, where N is the number of compositional fields. "
                            "If only one value is given, then all use the same value.  Units: None");
+        prm.declare_entry ("Plastic healing rate constant", "0.",
+                           Patterns::Double(0),
+                           "Constant healing rate applied to the plastic strain, "
+                           "Units: $1 / s$");
+        prm.declare_entry ("Plastic healing rate strain coefficient", "0.",
+                           Patterns::Double(0),
+                           "Healing rates coefficient that is multiplied by "
+                           "the current value of plastic strain, "
+                           "Units: $1 / s$");
+        prm.declare_entry ("Plastic healing strain limit", "0.",
+                           Patterns::Double(0),
+                           "Strain value that represents the lower limit  "
+                           "for the healing of the plastic strain, "
+                           "Units: None");
+
       }
 
       template <int dim>
@@ -278,6 +293,12 @@ namespace aspect
         friction_strain_weakening_factors = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Friction strain weakening factors"))),
                                                                                     n_fields,
                                                                                     "Friction strain weakening factors");
+
+        plastic_healing_rate_constant = prm.get_double ("Plastic healing rate constant");
+        plastic_healing_rate_strain_coefficient = prm.get_double ("Plastic healing rate strain coefficient");
+        plastic_healing_strain_limit = prm.get_double ("Plastic healing strain limit");
+
+
 
       }
 
@@ -543,4 +564,3 @@ namespace aspect
     ASPECT_INSTANTIATE(INSTANTIATE)
   }
 }
-

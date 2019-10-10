@@ -178,10 +178,25 @@ namespace aspect
            */
           std::vector<double> viscous_strain_weakening_factors;
 
+          /**
+           * Constant healing rate applied to the plastic strain.
+           */
+          double plastic_healing_rate_constant;
+
+          /**
+           * Healing rates coefficient that is multiplied by
+           * the current value of plastic strain.
+           */
+          double plastic_healing_rate_strain_coefficient;
+
+          /**
+           * Strain value that represents the lower limit
+           * for the healing of the plastic strain
+           */
+          double plastic_healing_strain_limit;
+
       };
     }
   }
 }
 #endif
-
-
