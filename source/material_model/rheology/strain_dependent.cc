@@ -433,19 +433,42 @@ namespace aspect
           {
             const double edot_ii = std::max(sqrt(std::fabs(second_invariant(deviator(in.strain_rate[i])))),min_strain_rate);
             const double e_ii = edot_ii*this->get_timestep();
-            if (weakening_mechanism == plastic_weakening_with_plastic_strain_only && plastic_yielding == true)
-              out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = e_ii;
+
+
+            // get the current value of the plastic strain
+            const double current_plastic_strain =  in.composition[i][this->introspection().compositional_index_for_name("plastic_strain")];
+
+            //determine the healing increment, which is set to zero if beneath the plastic_healing_strain_limit
+            double healing_inc = (plastic_healing_rate_constant + current_plastic_strain*plastic_healing_rate_strain_coefficient )*this->get_timestep();
+            if (current_plastic_strain < plastic_healing_strain_limit)
+              healing_inc = 0;
+
+            double plastic_strain_increment;
+
+            if (plastic_yielding == true)
+              //yielding, apply plastic strain and healing increment
+              plastic_strain_increment = e_ii - healing_inc;
+            else
+              //apply only healing increment
+              plastic_strain_increment = -1.0*healing_inc;
+
+            //apply the plastic strain increment to "plastic_strain" or "total_strain",
+            //and the total strain increment (e_ii) to "viscous_strain"
+            if (weakening_mechanism == plastic_weakening_with_plastic_strain_only)
+              out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = plastic_strain_increment;
             if (weakening_mechanism == viscous_weakening_with_viscous_strain_only && plastic_yielding == false)
               out.reaction_terms[i][this->introspection().compositional_index_for_name("viscous_strain")] = e_ii;
             if (weakening_mechanism == total_strain || weakening_mechanism == plastic_weakening_with_total_strain_only)
-              out.reaction_terms[i][this->introspection().compositional_index_for_name("total_strain")] = e_ii;
+              out.reaction_terms[i][this->introspection().compositional_index_for_name("total_strain")] = plastic_strain_increment;
             if (weakening_mechanism == plastic_weakening_with_plastic_strain_and_viscous_weakening_with_viscous_strain)
               {
                 if (plastic_yielding == true)
-                  out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = e_ii;
+                  out.reaction_terms[i][this->introspection().compositional_index_for_name("plastic_strain")] = plastic_strain_increment;
                 else
                   out.reaction_terms[i][this->introspection().compositional_index_for_name("viscous_strain")] = e_ii;
               }
+
+
           }
       }
 
