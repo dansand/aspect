@@ -441,7 +441,7 @@ namespace aspect
                 double current_plastic_strain;
                 if (weakening_mechanism == plastic_weakening_with_plastic_strain_only || plastic_weakening_with_plastic_strain_and_viscous_weakening_with_viscous_strain)
                   current_plastic_strain =  in.composition[i][this->introspection().compositional_index_for_name("plastic_strain")];
-                if (weakening_mechanism == total_strain || weakening_mechanism == plastic_weakening_with_total_strain_only))
+                if (weakening_mechanism == total_strain || weakening_mechanism == plastic_weakening_with_total_strain_only)
                   current_plastic_strain = in.composition[i][this->introspection().compositional_index_for_name("total_strain")];
 
                 //determine the healing increment, which is set to zero if beneath the plastic_healing_strain_limit
