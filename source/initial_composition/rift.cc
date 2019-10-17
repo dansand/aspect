@@ -170,8 +170,10 @@ namespace aspect
                 {
                   // Get the surface coordinates by dropping the last coordinate
                   const Point<2> surface_position = Point<2>(natural_coords[0],natural_coords[1]);
-                  temp_distance = std::abs(Utilities::distance_to_line<dim>(point_list[i_segments], surface_position));
-                }
+                  //temp_distance = std::abs(Utilities::distance_to_line<dim>(point_list[i_segments], surface_position));
+                  temp_distance = std::abs(Utilities::distance_to_line(point_list[i_segments], Point<2>(surface_position[0],surface_position[dim-2])));
+                }    
+
             }
           // chunk (spherical) geometries
           else
