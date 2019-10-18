@@ -120,13 +120,13 @@ namespace aspect
          * The list of line segments consisting of two 2d coordinates per segment (even in 2d).
          * The segments represent the rift axis.
          */
-        std::vector<std::vector<Point<2> > > point_list;
+        std::vector<std::array<Point<2>,2 > > point_list;
 
         /**
          * A table with random noise for the
          * second invariant of the strain.
          */
-        std::array<unsigned int,dim> grid_intervals;
+        std_cxx1x::array<unsigned int,dim> grid_intervals;
         Functions::InterpolatedUniformGridData<dim> *interpolate_noise;
     };
   }
