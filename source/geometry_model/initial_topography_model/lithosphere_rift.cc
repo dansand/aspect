@@ -73,9 +73,9 @@ namespace aspect
       const double sum_rift_thicknesses = std::accumulate(rift_thicknesses.begin(), rift_thicknesses.end(),0);
 
       // The column at the polygon center
-      const double n_polygons = polygon_thicknesses.size();
-      std::vector<double> polygon_rgh(n_polygons,0);
-      std::vector<double> sum_polygon_thicknesses(n_polygons,0);
+      const unsigned int n_polygons = polygon_thicknesses.size();
+      std::vector<double> polygon_rgh(n_polygons);
+      std::vector<double> sum_polygon_thicknesses(n_polygons);
       for (unsigned int i_polygons=0; i_polygons<n_polygons; ++i_polygons)
         {
           for (unsigned int l=0; l<3; ++l)
@@ -119,8 +119,9 @@ namespace aspect
       // Get the distance to the line segments along a path parallel to the surface
       double distance_to_rift_axis = 1e23;
       std::pair<double,unsigned int> distance_to_L_polygon;
-      const std::list<std::shared_ptr<InitialComposition::Interface<dim> > > initial_composition_objects = this->get_initial_composition_manager().get_active_initial_composition_conditions();
-      for (typename std::list<std::shared_ptr<InitialComposition::Interface<dim> > >::const_iterator it = initial_composition_objects.begin(); it != initial_composition_objects.end(); ++it)
+      for (typename std::list<std::unique_ptr<InitialComposition::Interface<dim> > >::const_iterator it = this->get_initial_composition_manager().get_active_initial_composition_conditions().begin();
+           it != this->get_initial_composition_manager().get_active_initial_composition_conditions().end();
+           ++it)
         if ( InitialComposition::LithosphereRift<dim> *ic = dynamic_cast<InitialComposition::LithosphereRift<dim> *> ((*it).get()))
           {
             distance_to_rift_axis = ic->distance_to_rift(surface_position);
@@ -234,9 +235,8 @@ namespace aspect
     ASPECT_REGISTER_INITIAL_TOPOGRAPHY_MODEL(LithosphereRift,
                                              "lithosphere with rift",
                                              "An initial topography model that defines the initial topography "
-                                             "as constant inside each of a set of polylineal parts of the "
-                                             "surface. The polylines, and their associated surface elevation, "
-                                             "are defined in the `Geometry model/Initial topography/Prm polyline' "
-                                             "section.")
+                                             "based on isostasy. It takes into account lithospheric thickness "
+                                             "variations as specified in the InitialComposition model lithosphere "
+                                             "with rift' as should only be used in conjunction with this model. ")
   }
 }
