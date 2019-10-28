@@ -379,7 +379,18 @@ namespace aspect
 
     if (parameters.stokes_solver_type == Parameters<dim>::StokesSolverType::block_gmg)
       {
-        stokes_matrix_free = std_cxx14::make_unique<StokesMatrixFreeHandler<dim>>(*this, prm);
+        switch (parameters.stokes_velocity_degree)
+          {
+            case 2:
+              stokes_matrix_free = std_cxx14::make_unique<StokesMatrixFreeHandlerImplementation<dim,2>>(*this, prm);
+              break;
+            case 3:
+              stokes_matrix_free = std_cxx14::make_unique<StokesMatrixFreeHandlerImplementation<dim,3>>(*this, prm);
+              break;
+            default:
+              AssertThrow(false, ExcMessage("The finite element degree for the Stokes system you selected is not supported yet."));
+          }
+
       }
 
     postprocess_manager.initialize_simulator (*this);
@@ -540,8 +551,8 @@ namespace aspect
          * function given to the constructor
          * produces for this point.
          */
-        virtual double value (const Point<dim>   &p,
-                              const unsigned int  component = 0) const;
+        double value (const Point<dim>   &p,
+                      const unsigned int  component = 0) const override;
 
         /**
          * Return all components of a
@@ -552,8 +563,8 @@ namespace aspect
          * size beforehand,
          * i.e. #n_components.
          */
-        virtual void vector_value (const Point<dim>   &p,
-                                   Vector<double>     &values) const;
+        void vector_value (const Point<dim>   &p,
+                           Vector<double>     &values) const override;
 
       private:
         /**
@@ -845,8 +856,16 @@ namespace aspect
 #ifdef DEBUG
     IndexSet locally_active_dofs;
     DoFTools::extract_locally_active_dofs(dof_handler, locally_active_dofs);
+    const std::vector<IndexSet> locally_owned_per_proc
+#if DEAL_II_VERSION_GTE(9,2,0)
+      = dof_handler.compute_locally_owned_dofs_per_processor();
+#else
+      = dof_handler.locally_owned_dofs_per_processor();
+#endif
+
+
     Assert(current_constraints.is_consistent_in_parallel(
-             dof_handler.locally_owned_dofs_per_processor(),
+             locally_owned_per_proc,
              locally_active_dofs,
              mpi_communicator,
              /*verbose = */ false),
@@ -932,7 +951,9 @@ namespace aspect
       // solves are going to be performed.
       if (!(parameters.nonlinear_solver == NonlinearSolver::Kind::no_Advection_iterated_Stokes
             ||
-            parameters.nonlinear_solver == NonlinearSolver::Kind::no_Advection_no_Stokes))
+            parameters.nonlinear_solver == NonlinearSolver::Kind::no_Advection_no_Stokes
+            ||
+            parameters.nonlinear_solver == NonlinearSolver::Kind::first_timestep_only_single_Stokes))
         coupling[x.temperature][x.temperature] = DoFTools::always;
 
       // For equal-order interpolation, we need a stabilization term
@@ -1540,9 +1561,7 @@ namespace aspect
       // clear refinement flags if parameter.refinement_fraction=0.0
       if (parameters.refinement_fraction==0.0)
         {
-          for (typename Triangulation<dim>::active_cell_iterator
-               cell = triangulation.begin_active();
-               cell != triangulation.end(); ++cell)
+          for (const auto &cell : triangulation.active_cell_iterators())
             cell->clear_refine_flag ();
         }
       else
@@ -1558,9 +1577,7 @@ namespace aspect
       // clear coarsening flags if parameter.coarsening_fraction=0.0
       if (parameters.coarsening_fraction==0.0)
         {
-          for (typename Triangulation<dim>::active_cell_iterator
-               cell = triangulation.begin_active();
-               cell != triangulation.end(); ++cell)
+          for (const auto &cell : triangulation.active_cell_iterators())
             cell->clear_coarsen_flag ();
         }
       else
@@ -1800,9 +1817,7 @@ namespace aspect
         // refine_global(n).
         for (unsigned int n=0; n<parameters.initial_global_refinement; ++n)
           {
-            for (typename Triangulation<dim>::active_cell_iterator
-                 cell = triangulation.begin_active();
-                 cell != triangulation.end(); ++cell)
+            for (const auto &cell : triangulation.active_cell_iterators())
               cell->set_refine_flag ();
 
             mesh_refinement_manager.tag_additional_cells ();

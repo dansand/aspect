@@ -346,10 +346,7 @@ namespace aspect
     // loop over all locally owned cells and evaluate the velocities at each
     // quadrature point (i.e. each node). keep a running tally of the largest
     // such velocity
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-    for (; cell!=endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           fe_values.reinit (cell);
@@ -527,17 +524,12 @@ namespace aspect
     double max_local_speed_over_meshsize = 0;
     double min_local_conduction_timestep = std::numeric_limits<double>::max();
 
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-
-
     MaterialModel::MaterialModelInputs<dim> in(n_q_points,
                                                introspection.n_compositional_fields);
     MaterialModel::MaterialModelOutputs<dim> out(n_q_points,
                                                  introspection.n_compositional_fields);
 
-    for (; cell!=endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           fe_values.reinit (cell);
@@ -665,10 +657,7 @@ namespace aspect
 
     if (timestep_number > 1)
       {
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell!=endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               fe_values.reinit (cell);
@@ -692,10 +681,7 @@ namespace aspect
       }
     else
       {
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell!=endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               fe_values.reinit (cell);
@@ -734,9 +720,7 @@ namespace aspect
     FEValues<dim> mesh_points (*mapping, finite_element, mesh_support_points, update_quadrature_points);
     std::vector<types::global_dof_index> cell_dof_indices (finite_element.dofs_per_cell);
 
-    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(),
-                                                   endc = dof_handler.end();
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           mesh_points.reinit(cell);
@@ -781,10 +765,7 @@ namespace aspect
 
         std::vector<double> pressure_values(n_q_points);
 
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               for (unsigned int face_no = 0; face_no < GeometryInfo<dim>::faces_per_cell; ++face_no)
@@ -819,10 +800,7 @@ namespace aspect
 
         std::vector<double> pressure_values(n_q_points);
 
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               fe_values.reinit (cell);
@@ -887,10 +865,7 @@ namespace aspect
                                                         finite_element.base_element(introspection.variable("fluid pressure").base_index).dofs_per_cell
                                                         : finite_element.base_element(introspection.base_elements.pressure).dofs_per_cell);
             std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
-            typename DoFHandler<dim>::active_cell_iterator
-            cell = dof_handler.begin_active(),
-            endc = dof_handler.end();
-            for (; cell != endc; ++cell)
+            for (const auto &cell : dof_handler.active_cell_iterators())
               if (cell->is_locally_owned())
                 {
                   cell->get_dof_indices (local_dof_indices);
@@ -928,10 +903,8 @@ namespace aspect
                                                  introspection.variable("fluid pressure").first_component_index
                                                  : introspection.component_indices.pressure);
         std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell != endc; ++cell)
+
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               // identify the first pressure dof
@@ -986,10 +959,7 @@ namespace aspect
                                                         : finite_element.base_element(introspection.base_elements.pressure).dofs_per_cell);
 
             std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
-            typename DoFHandler<dim>::active_cell_iterator
-            cell = dof_handler.begin_active(),
-            endc = dof_handler.end();
-            for (; cell != endc; ++cell)
+            for (const auto &cell : dof_handler.active_cell_iterators())
               if (cell->is_locally_owned())
                 {
                   cell->get_dof_indices (local_dof_indices);
@@ -1027,10 +997,7 @@ namespace aspect
         Assert(!parameters.include_melt_transport, ExcNotImplemented());
         const unsigned int pressure_component = introspection.component_indices.pressure;
         std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               // identify the first pressure dof
@@ -1149,10 +1116,7 @@ namespace aspect
                                                  introspection.variable("fluid pressure").first_component_index
                                                  : introspection.component_indices.pressure);
         std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
-        typename DoFHandler<dim>::active_cell_iterator
-        cell = dof_handler.begin_active(),
-        endc = dof_handler.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               // identify the first pressure dof
@@ -1173,7 +1137,7 @@ namespace aspect
         const double correction = - global_int_rhs / global_volume;
 
         // Now modify our RHS with the correction factor:
-        for (cell = dof_handler.begin_active(); cell != endc; ++cell)
+        for (const auto &cell : dof_handler.active_cell_iterators())
           if (cell->is_locally_owned())
             {
               // identify the first pressure dof
@@ -1442,82 +1406,78 @@ namespace aspect
 
     std::vector<types::global_dof_index> local_dof_indices (finite_element.dofs_per_cell);
 
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-    for (; cell != endc; ++cell)
-      {
-        if (cell->is_locally_owned())
-          {
-            cell->get_dof_indices (local_dof_indices);
-            // used to find the maximum, minimum
-            fe_values.reinit (cell);
-            fe_values[field].get_function_values(solution, values);
-            // used for the numerical integration
-            fe_values_0.reinit (cell);
-            fe_values_0[field].get_function_values(solution, values_0);
+    for (const auto &cell : dof_handler.active_cell_iterators())
+      if (cell->is_locally_owned())
+        {
+          cell->get_dof_indices (local_dof_indices);
+          // used to find the maximum, minimum
+          fe_values.reinit (cell);
+          fe_values[field].get_function_values(solution, values);
+          // used for the numerical integration
+          fe_values_0.reinit (cell);
+          fe_values_0[field].get_function_values(solution, values_0);
 
-            // Find the local max and local min
-            const double min_solution_local = *std::min_element (values.begin(), values.end());
-            const double max_solution_local = *std::max_element (values.begin(), values.end());
-            // Find the trouble cell
-            if (min_solution_local < min_solution_exact_global
-                || max_solution_local > max_solution_exact_global)
-              {
-                // Compute the cell area and cell solution average
-                double local_area = 0.0;
-                double local_solution_average = 0.0;
-                for (unsigned int q = 0; q < n_q_points_0; ++q)
-                  {
-                    local_area += fe_values_0.JxW(q);
-                    local_solution_average += values_0[q]*fe_values_0.JxW(q);
-                  }
-                local_solution_average /= local_area;
+          // Find the local max and local min
+          const double min_solution_local = *std::min_element (values.begin(), values.end());
+          const double max_solution_local = *std::max_element (values.begin(), values.end());
+          // Find the trouble cell
+          if (min_solution_local < min_solution_exact_global
+              || max_solution_local > max_solution_exact_global)
+            {
+              // Compute the cell area and cell solution average
+              double local_area = 0.0;
+              double local_solution_average = 0.0;
+              for (unsigned int q = 0; q < n_q_points_0; ++q)
+                {
+                  local_area += fe_values_0.JxW(q);
+                  local_solution_average += values_0[q]*fe_values_0.JxW(q);
+                }
+              local_solution_average /= local_area;
 
-                /*
-                 * Define theta: a scaling constant used to correct the old solution by the formula
-                 *   new_value = theta * (old_value-old_solution_cell_average)+old_solution_cell_average
-                 * where theta \in [0,1] defined as below.
-                 * After the correction, the new solution does not exceed the user-given
-                 * exact global maximum/minimum values. Meanwhile, the new solution's cell average
-                 * equals to the old solution's cell average.
-                 */
-                double theta = 1.0;
-                if (std::abs(max_solution_local-local_solution_average) > std::numeric_limits<double>::min())
-                  {
-                    theta = std::min(theta, std::abs((max_solution_exact_global-local_solution_average)
-                                                     / (max_solution_local-local_solution_average)));
-                  }
-                if (std::abs(min_solution_local-local_solution_average) > std::numeric_limits<double>::min())
-                  {
-                    theta = std::min(theta, std::abs((min_solution_exact_global-local_solution_average)
-                                                     / (min_solution_local-local_solution_average)));
-                  }
+              /*
+               * Define theta: a scaling constant used to correct the old solution by the formula
+               *   new_value = theta * (old_value-old_solution_cell_average)+old_solution_cell_average
+               * where theta \in [0,1] defined as below.
+               * After the correction, the new solution does not exceed the user-given
+               * exact global maximum/minimum values. Meanwhile, the new solution's cell average
+               * equals to the old solution's cell average.
+               */
+              double theta = 1.0;
+              if (std::abs(max_solution_local-local_solution_average) > std::numeric_limits<double>::min())
+                {
+                  theta = std::min(theta, std::abs((max_solution_exact_global-local_solution_average)
+                                                   / (max_solution_local-local_solution_average)));
+                }
+              if (std::abs(min_solution_local-local_solution_average) > std::numeric_limits<double>::min())
+                {
+                  theta = std::min(theta, std::abs((min_solution_exact_global-local_solution_average)
+                                                   / (min_solution_local-local_solution_average)));
+                }
 
-                /* Modify the advection degrees of freedom of the numerical solution.
-                 * Note that we are using DG elements, so every DoF on a locally owned cell is locally owned;
-                 * this means that we do not need to check whether the 'distributed_solution' vector actually
-                 * stores the element we read from/write to here.
-                 */
-                for (unsigned int j = 0;
-                     j < finite_element.base_element(advection_field.base_element(introspection)).dofs_per_cell;
-                     ++j)
-                  {
-                    const unsigned int support_point_index = finite_element.component_to_system_index(
-                                                               (advection_field.is_temperature()
-                                                                ?
-                                                                introspection.component_indices.temperature
-                                                                :
-                                                                introspection.component_indices.compositional_fields[advection_field.compositional_variable]
-                                                               ),
-                                                               /*dof index within component=*/ j);
-                    const double solution_value = solution(local_dof_indices[support_point_index]);
-                    const double limited_solution_value = theta * (solution_value-local_solution_average) + local_solution_average;
-                    distributed_solution(local_dof_indices[support_point_index]) = limited_solution_value;
-                  }
-              }
-          }
-      }
+              /* Modify the advection degrees of freedom of the numerical solution.
+               * Note that we are using DG elements, so every DoF on a locally owned cell is locally owned;
+               * this means that we do not need to check whether the 'distributed_solution' vector actually
+               * stores the element we read from/write to here.
+               */
+              for (unsigned int j = 0;
+                   j < finite_element.base_element(advection_field.base_element(introspection)).dofs_per_cell;
+                   ++j)
+                {
+                  const unsigned int support_point_index = finite_element.component_to_system_index(
+                                                             (advection_field.is_temperature()
+                                                              ?
+                                                              introspection.component_indices.temperature
+                                                              :
+                                                              introspection.component_indices.compositional_fields[advection_field.compositional_variable]
+                                                             ),
+                                                             /*dof index within component=*/ j);
+                  const double solution_value = solution(local_dof_indices[support_point_index]);
+                  const double limited_solution_value = theta * (solution_value-local_solution_average) + local_solution_average;
+                  distributed_solution(local_dof_indices[support_point_index]) = limited_solution_value;
+                }
+            }
+        }
+
     distributed_solution.compress(VectorOperation::insert);
     // now get back to the original vector
     solution.block(block_idx) = distributed_solution.block(block_idx);
@@ -1616,10 +1576,8 @@ namespace aspect
     // back onto the solution vector.
     // So even though we touch some DoF more than once, we always start from the same value, compute the
     // same value, and then overwrite the same value in distributed_vector.
-    // TODO: make this more effective
-    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(),
-                                                   endc = dof_handler.end();
-    for (; cell!=endc; ++cell)
+    // TODO: make this more efficient.
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           fe_values_C.reinit (cell);
@@ -1784,23 +1742,28 @@ namespace aspect
 
 
   template <int dim>
-  void Simulator<dim>::interpolate_material_output_into_compositional_field (const unsigned int c)
+  void Simulator<dim>::interpolate_material_output_into_advection_field (const AdvectionField &adv_field)
   {
     // we need some temporary vectors to store our updates to composition in
     // before we copy them over to the solution vector in the end
     LinearAlgebra::BlockVector distributed_vector (introspection.index_sets.system_partitioning,
                                                    mpi_communicator);
 
-    const std::string name_of_field = introspection.name_for_compositional_index(c);
+    if (adv_field.is_temperature())
+      pcout << "   Copying properties into prescribed temperature field."
+            << std::endl;
+    else
+      {
+        const std::string name_of_field = introspection.name_for_compositional_index(adv_field.compositional_variable);
 
-    pcout << "   Copying properties into prescribed compositional field " + name_of_field + "."
-          << std::endl;
+        pcout << "   Copying properties into prescribed compositional field " + name_of_field + "."
+              << std::endl;
+      }
 
     // Create an FEValues object that allows us to interpolate onto the solution
     // vector. To make this happen, we need to have a quadrature formula that
-    // consists of the support points of the compositional field finite element
-    const Quadrature<dim> quadrature(dof_handler.get_fe()
-                                     .base_element(introspection.base_elements.compositional_fields)
+    // consists of the support points of the advection field finite element
+    const Quadrature<dim> quadrature(dof_handler.get_fe().base_element(adv_field.base_element(introspection))
                                      .get_unit_support_points());
 
     FEValues<dim> fe_values (*mapping,
@@ -1817,13 +1780,26 @@ namespace aspect
 
     MaterialModel::PrescribedFieldOutputs<dim> *prescribed_field_out
       = out.template get_additional_output<MaterialModel::PrescribedFieldOutputs<dim> >();
+    MaterialModel::PrescribedTemperatureOutputs<dim> *prescribed_temperature_out
+      = out.template get_additional_output<MaterialModel::PrescribedTemperatureOutputs<dim> >();
 
-    // check if the material model computes prescribed field outputs
-    AssertThrow(prescribed_field_out != nullptr,
-                ExcMessage("You are trying to use a prescribed advection field, "
-                           "but the material model you use does not support interpolating properties "
-                           "(it does not create PrescribedFieldOutputs, which is required for this "
-                           "advection field type)."));
+    // check if the material model computes the correct prescribed field outputs
+    if (adv_field.is_temperature())
+      {
+        AssertThrow(prescribed_temperature_out != nullptr,
+                    ExcMessage("You are trying to use a prescribed temperature field, "
+                               "but the material model you use does not support interpolating properties "
+                               "(it does not create PrescribedTemperatureOutputs, which is required for this "
+                               "temperature field type)."));
+      }
+    else
+      {
+        AssertThrow(prescribed_field_out != nullptr,
+                    ExcMessage("You are trying to use a prescribed advection field, "
+                               "but the material model you use does not support interpolating properties "
+                               "(it does not create PrescribedFieldOutputs, which is required for this "
+                               "advection field type)."));
+      }
 
     // Make a loop first over all cells, and then over all degrees of freedom in each element
     // to interpolate material properties onto a solution vector.
@@ -1833,9 +1809,7 @@ namespace aspect
     // interface between cells), as we loop over all cells, and then over all degrees of freedom
     // on each cell. But even though we touch some DoF more than once, we always compute the same value,
     // and then overwrite the same value in distributed_vector.
-    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(),
-                                                   endc = dof_handler.end();
-    for (; cell!=endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           fe_values.reinit (cell);
@@ -1844,33 +1818,49 @@ namespace aspect
 
           material_model->evaluate(in, out);
 
-          // Interpolate material properties onto the compositional fields
-          for (unsigned int j=0; j<dof_handler.get_fe().base_element(introspection.base_elements.compositional_fields).dofs_per_cell; ++j)
+          // Interpolate material properties onto the advection fields
+          const unsigned int advection_dofs_per_cell =
+            dof_handler.get_fe().base_element(adv_field.base_element(introspection)).dofs_per_cell;
+
+          for (unsigned int j=0; j<advection_dofs_per_cell; ++j)
             {
-              const unsigned int composition_idx
-                = dof_handler.get_fe().component_to_system_index(introspection.component_indices.compositional_fields[c],
+              const unsigned int dof_idx
+                = dof_handler.get_fe().component_to_system_index(adv_field.component_index(introspection),
                                                                  /*dof index within component=*/ j);
 
               // Skip degrees of freedom that are not locally owned. These
               // will eventually be handled by one of the other processors.
-              if (dof_handler.locally_owned_dofs().is_element(local_dof_indices[composition_idx]))
+              if (dof_handler.locally_owned_dofs().is_element(local_dof_indices[dof_idx]))
                 {
-                  Assert(numbers::is_finite(prescribed_field_out->prescribed_field_outputs[j][c]),
-                         ExcMessage("You are trying to use a prescribed advection field, "
-                                    "but the material model you use does not fill the PrescribedFieldOutputs "
-                                    "for your prescribed field, which is required for this method."));
+                  if (adv_field.is_temperature())
+                    {
+                      Assert(numbers::is_finite(prescribed_temperature_out->prescribed_temperature_outputs[j]),
+                             ExcMessage("You are trying to use a prescribed advection field, "
+                                        "but the material model you use does not fill the PrescribedFieldOutputs "
+                                        "for your prescribed field, which is required for this method."));
 
-                  distributed_vector(local_dof_indices[composition_idx])
-                    = prescribed_field_out->prescribed_field_outputs[j][c];
+                      distributed_vector(local_dof_indices[dof_idx])
+                        = prescribed_temperature_out->prescribed_temperature_outputs[j];
+                    }
+                  else
+                    {
+                      Assert(numbers::is_finite(prescribed_field_out->prescribed_field_outputs[j][adv_field.compositional_variable]),
+                             ExcMessage("You are trying to use a prescribed advection field, "
+                                        "but the material model you use does not fill the PrescribedFieldOutputs "
+                                        "for your prescribed field, which is required for this method."));
+
+                      distributed_vector(local_dof_indices[dof_idx])
+                        = prescribed_field_out->prescribed_field_outputs[j][adv_field.compositional_variable];
+                    }
                 }
             }
         }
 
     // Put the final values into the solution vector, also
     // updating the ghost elements of the 'solution' vector.
-    const unsigned int block_c = introspection.block_indices.compositional_fields[c];
-    distributed_vector.block(block_c).compress(VectorOperation::insert);
-    solution.block(block_c) = distributed_vector.block(block_c);
+    const unsigned int advection_block = adv_field.block_index(introspection);
+    distributed_vector.block(advection_block).compress(VectorOperation::insert);
+    solution.block(advection_block) = distributed_vector.block(advection_block);
   }
 
 
@@ -1982,11 +1972,7 @@ namespace aspect
     std::vector<Tensor<1,dim> > face_current_velocity_values (fe_face_values.n_quadrature_points);
 
     // Loop over all of the boundary faces, ...
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-
-    for (; cell!=endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (!cell->is_artificial())
         for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
           {
@@ -2023,11 +2009,7 @@ namespace aspect
   Simulator<dim>::restore_outflow_boundary_ids(const unsigned int offset)
   {
     // Loop over all of the boundary faces...
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-
-    for (; cell!=endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       if (!cell->is_artificial())
         for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
           {
@@ -2399,7 +2381,7 @@ namespace aspect
   template void Simulator<dim>::interpolate_onto_velocity_system(const TensorFunction<1,dim> &func, LinearAlgebra::Vector &vec);\
   template void Simulator<dim>::apply_limiter_to_dg_solutions(const AdvectionField &advection_field); \
   template void Simulator<dim>::compute_reactions(); \
-  template void Simulator<dim>::interpolate_material_output_into_compositional_field(const unsigned int c); \
+  template void Simulator<dim>::interpolate_material_output_into_advection_field(const AdvectionField &adv_field); \
   template void Simulator<dim>::check_consistency_of_formulation(); \
   template void Simulator<dim>::replace_outflow_boundary_ids(const unsigned int boundary_id_offset); \
   template void Simulator<dim>::restore_outflow_boundary_ids(const unsigned int boundary_id_offset); \

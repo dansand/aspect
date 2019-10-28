@@ -55,36 +55,35 @@ namespace aspect
            */
           void build_patches(const Particles::ParticleHandler<dim> &particle_handler,
                              const aspect::Particle::Property::ParticlePropertyInformation &property_information,
+                             const std::vector<std::string> &exclude_output_properties,
                              const bool only_group_3d_vectors);
 
         private:
           /**
            * Implementation of the corresponding function of the base class.
            */
-          virtual const std::vector<DataOutBase::Patch<0,dim> > &
-          get_patches () const;
+          const std::vector<DataOutBase::Patch<0,dim> > &
+          get_patches () const override;
 
           /**
            * Implementation of the corresponding function of the base class.
            */
-          virtual std::vector< std::string >
-          get_dataset_names () const;
+          std::vector< std::string >
+          get_dataset_names () const override;
 
           /**
            * Implementation of the corresponding function of the base class.
            */
 #if DEAL_II_VERSION_GTE(9,1,0)
-          virtual
           std::vector<
           std::tuple<unsigned int,
               unsigned int,
               std::string,
               DataComponentInterpretation::DataComponentInterpretation> >
-              get_nonscalar_data_ranges () const;
+              get_nonscalar_data_ranges () const override;
 #else
-          virtual
           std::vector<std::tuple<unsigned int, unsigned int, std::string> >
-          get_vector_data_ranges() const;
+          get_vector_data_ranges() const override;
 #endif
 
           /**
@@ -136,7 +135,7 @@ namespace aspect
         /**
          * Destructor.
          */
-        ~Particles();
+        ~Particles() override;
 
         /**
          * Generate the particles. This can not be done in another
@@ -189,20 +188,17 @@ namespace aspect
          * contains a numerical value of this data. If there is nothing to
          * print, simply return two empty strings.
          */
-        virtual
-        std::pair<std::string,std::string> execute (TableHandler &statistics);
+        std::pair<std::string,std::string> execute (TableHandler &statistics) override;
 
         /**
          * Save the state of this object.
          */
-        virtual
-        void save (std::map<std::string, std::string> &status_strings) const;
+        void save (std::map<std::string, std::string> &status_strings) const override;
 
         /**
          * Restore the state of the object.
          */
-        virtual
-        void load (const std::map<std::string, std::string> &status_strings);
+        void load (const std::map<std::string, std::string> &status_strings) override;
 
         /**
          * Serialize the contents of this class as far as they are not read
@@ -221,9 +217,8 @@ namespace aspect
         /**
          * Read the parameters this class declares from the parameter file.
          */
-        virtual
         void
-        parse_parameters (ParameterHandler &prm);
+        parse_parameters (ParameterHandler &prm) override;
 
       private:
         /**
@@ -325,6 +320,12 @@ namespace aspect
          * The writer() function runs on this background thread.
          */
         Threads::Thread<void> background_thread;
+
+        /**
+         * Stores the particle property fields which are excluded from output
+         * to the visualization file.
+         */
+        std::vector<std::string> exclude_output_properties;
 
         /**
          * A function that writes the text in the second argument to a file

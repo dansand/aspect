@@ -557,6 +557,7 @@ namespace aspect
       prm.declare_entry ("Mass conservation", "ask material model",
                          Patterns::Selection ("incompressible|isentropic compression|hydrostatic compression|"
                                               "reference density profile|implicit reference density profile|"
+                                              "projected density field|"
                                               "ask material model"),
                          "Possible approximations for the density derivatives in the mass "
                          "conservation equation. Note that this parameter is only evaluated "
@@ -1063,6 +1064,32 @@ namespace aspect
       prm.leave_subsection ();
     }
     prm.leave_subsection ();
+
+    prm.enter_subsection ("Temperature field");
+    {
+      prm.declare_entry ("Temperature method", "field",
+                         Patterns::Selection("field|prescribed field"),
+                         "A comma separated list denoting the solution method of the "
+                         "temperature field. Each entry of the list must be "
+                         "one of the currently implemented field types."
+                         "\n\n"
+                         "These choices correspond to the following methods by which "
+                         "the temperature field gains its values:"
+                         "\\begin{itemize}"
+                         "\\item ``field'': If the temperature is marked with this "
+                         "method, then its values are computed in each time step by "
+                         "solving the temperature advection-diffusion equation. In other words, "
+                         "this corresponds to the usual notion of a temperature. "
+                         "\n"
+                         "\\item ``prescribed field'': The value of the temperature is determined "
+                         "in each time step from the material model. If a compositional field is "
+                         "marked with this method, then the value of a specific additional material "
+                         "model output, called the `PrescribedTemperatureOutputs' is interpolated "
+                         "onto the temperature. This field does not change otherwise, it is not "
+                         "advected with the flow. \n"
+                         "\\end{itemize}");
+    }
+    prm.leave_subsection();
 
     prm.enter_subsection ("Compositional fields");
     {
@@ -1610,6 +1637,20 @@ namespace aspect
     }
     prm.leave_subsection ();
 
+    prm.enter_subsection ("Temperature field");
+    {
+      std::string x_temperature_method
+        = prm.get ("Temperature method");
+
+      if (x_temperature_method == "field")
+        temperature_method = AdvectionFieldMethod::fem_field;
+      else if (x_temperature_method == "prescribed field")
+        temperature_method = AdvectionFieldMethod::prescribed_field;
+      else
+        AssertThrow(false,ExcNotImplemented());
+    }
+    prm.leave_subsection();
+
     prm.enter_subsection ("Compositional fields");
     {
       n_compositional_fields = prm.get_integer ("Number of fields");
@@ -1739,15 +1780,6 @@ namespace aspect
         AssertThrow (this->include_melt_transport,
                      ExcMessage ("The advection method 'melt field' can only be selected if melt "
                                  "transport is used in the simulation."));
-
-      if (std::find(compositional_field_methods.begin(), compositional_field_methods.end(), AdvectionFieldMethod::prescribed_field)
-          != compositional_field_methods.end()
-          ||
-          std::find(compositional_field_methods.begin(), compositional_field_methods.end(), AdvectionFieldMethod::prescribed_field_with_diffusion)
-          != compositional_field_methods.end())
-        AssertThrow (!this->use_discontinuous_composition_discretization,
-                     ExcMessage ("The advection method 'prescribed field' has not yet been tested with "
-                                 "a discontinuous composition discretization."));
 
       const std::vector<std::string> x_mapped_particle_properties
         = Utilities::split_string_list

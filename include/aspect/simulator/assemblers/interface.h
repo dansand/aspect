@@ -70,7 +70,7 @@ namespace aspect
             face_number(scratch.face_number)
           {}
 
-          virtual ~ScratchBase () {};
+          virtual ~ScratchBase ()  = default;
 
           /**
            * Cell object on which we currently operate.
@@ -103,7 +103,7 @@ namespace aspect
                                 const bool                rebuild_matrix);
           StokesPreconditioner (const StokesPreconditioner &scratch);
 
-          virtual ~StokesPreconditioner ();
+          ~StokesPreconditioner () override;
 
           FEValues<dim> finite_element_values;
 
@@ -344,7 +344,7 @@ namespace aspect
         template <int dim>
         struct CopyDataBase
         {
-          virtual ~CopyDataBase () {};
+          virtual ~CopyDataBase () = default;
         };
 
         /**
@@ -359,7 +359,7 @@ namespace aspect
 
           StokesPreconditioner (const StokesPreconditioner &data);
 
-          virtual ~StokesPreconditioner ();
+          ~StokesPreconditioner () override;
 
           FullMatrix<double> local_matrix;
           std::vector<types::global_dof_index> local_dof_indices;
