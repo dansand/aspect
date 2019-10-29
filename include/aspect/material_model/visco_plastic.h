@@ -27,6 +27,7 @@
 #include <aspect/material_model/rheology/diffusion_creep.h>
 #include <aspect/material_model/rheology/dislocation_creep.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
+#include <aspect/material_model/rheology/elasticity.h>
 
 #include<deal.II/fe/component_mask.h>
 
@@ -47,7 +48,7 @@ namespace aspect
       public:
         PlasticAdditionalOutputs(const unsigned int n_points);
 
-        std::vector<double> get_nth_output(const unsigned int idx) const override;
+        virtual std::vector<double> get_nth_output(const unsigned int idx) const;
 
         /**
          * Cohesions at the evaluation points passed to
@@ -129,8 +130,8 @@ namespace aspect
     {
       public:
 
-        void evaluate(const MaterialModel::MaterialModelInputs<dim> &in,
-                      MaterialModel::MaterialModelOutputs<dim> &out) const override;
+        virtual void evaluate(const MaterialModel::MaterialModelInputs<dim> &in,
+                              MaterialModel::MaterialModelOutputs<dim> &out) const;
 
         /**
          * Return whether the model is compressible or not.  Incompressibility
@@ -142,19 +143,21 @@ namespace aspect
         *
         * This material model is incompressible.
          */
-        bool is_compressible () const override;
+        virtual bool is_compressible () const;
 
-        double reference_viscosity () const override;
+        virtual double reference_viscosity () const;
 
         static
         void
         declare_parameters (ParameterHandler &prm);
 
+        virtual
         void
-        parse_parameters (ParameterHandler &prm) override;
+        parse_parameters (ParameterHandler &prm);
 
+        virtual
         void
-        create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const override;
+        create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const;
 
         double get_min_strain_rate() const;
 
@@ -270,6 +273,17 @@ namespace aspect
          */
         Rheology::DiffusionCreep<dim> diffusion_creep;
         Rheology::DislocationCreep<dim> dislocation_creep;
+
+       /** 
+        * Object for computing viscoelastic viscosities and stresses.
+        */ 
+       Rheology::Elasticity<dim> elastic_rheology;
+
+      /**
+       * Whether to include viscoelasticity in the constitutive formulation.
+       */
+      bool use_elasticity;
+
     };
 
   }

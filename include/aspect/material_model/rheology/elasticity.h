@@ -42,7 +42,7 @@ namespace aspect
       public:
         explicit ElasticAdditionalOutputs(const unsigned int n_points);
 
-        std::vector<double> get_nth_output(const unsigned int idx) const override;
+        virtual std::vector<double> get_nth_output(const unsigned int idx) const;
 
         /**
          * Elastic shear moduli at the evaluation points passed to
@@ -118,6 +118,11 @@ namespace aspect
           calculate_viscoelastic_viscosity (const double viscosity,
                                             const double shear_modulus) const;
 
+          /**
+           * Compute the elastic time step.
+           */
+          double
+          elastic_timestep () const;
 
         private:
           /**
@@ -147,11 +152,6 @@ namespace aspect
            */
           double fixed_elastic_time_step;
 
-          /**
-           * Compute the elastic time step.
-           */
-          double
-          elastic_timestep () const;
       };
     }
   }
