@@ -212,7 +212,7 @@ namespace aspect
 
               //assume we can add a tensor of the same dimension
               SymmetricTensor<2,dim> stress_ve = viscosities_ve[j] * ( 2. * deviator(strain_rate) +  stress_old / (elastic_shear_moduli[j] * dte));
-              double stress_ve_mag = std::sqrt(0.5*(stress_ve[0][0]*stress_ve[0][0]+stress_ve[1][1]*stress_ve[1][1])+stressFn[0][1]*stressFn[0][1]);
+              double stress_ve_mag = std::sqrt(0.5*(stress_ve[0][0]*stress_ve[0][0]+stress_ve[1][1]*stress_ve[1][1])+stress_ve[0][1]*stress_ve[0][1]);
 
               stresses_ve[j] = stress_ve_mag;
               //stresses_ve[j] = viscosities_ve[j] * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
