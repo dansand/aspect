@@ -209,9 +209,14 @@ namespace aspect
               viscosities_ve[j] = viscosity_pre_yield * dte / (dte + (viscosity_pre_yield/elastic_shear_moduli[j]));
 
               viscosity_pre_yield = viscosities_ve[j];
- 
-              stresses_ve[j] = viscosities_ve[j] * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
-            } 
+
+              //assume we can add a tensor of the same dimension
+              SymmetricTensor<2,dim> stress_ve = viscosities_ve[j] * ( 2. * deviator(strain_rate) +  stress_old / (elastic_shear_moduli[j] * dte));
+              double stress_ve_mag = std::sqrt(0.5*(stress_ve[0][0]*stress_ve+stress_ve[1][1]*stress_ve[1][1])+stressFn[0][1]*stressFn[0][1]);
+
+              stresses_ve[j] = stress_ve_mag;
+              //stresses_ve[j] = viscosities_ve[j] * std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+            }
 
            viscosity_pre_yield *= weakening_factors[2];
 
@@ -256,9 +261,17 @@ namespace aspect
                 else
                   {
                     if (stresses_ve[j] >= plastic_out.yield_strength)
-                      viscosity_yield = plastic_out.yield_strength /
-                                        std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
-                  } 
+                      //assume we can add a tensor of the same dimension
+
+                      SymmetricTensor<2,dim> D_eff =   2. * deviator(strain_rate) +  stress_old / (elastic_shear_moduli[j] * dte);
+
+                      double D_eff_mag = std::sqrt(0.5*(D_eff[0][0]*D_eff+D_eff[1][1]*D_eff[1][1])+D_eff[0][1]*D_eff[0][1]);
+
+                      viscosity_yield = plastic_out.yield_strength /(D_eff_mag + min_strain_rate)
+
+                      //viscosity_yield = plastic_out.yield_strength /
+                      //                  std::sqrt(std::fabs(second_invariant((2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte) ) ) ) );
+                  }
                 break;
               }
               default:
@@ -536,7 +549,7 @@ namespace aspect
       strain_rheology.compute_finite_strain_reaction_terms(in, out);
 
       if (use_elasticity)
-        { 
+        {
           elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
           elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
         }
