@@ -276,15 +276,15 @@ namespace aspect
          */
         Rheology::DruckerPragerParameters drucker_prager_parameters;
 
-       /** 
-        * Object for computing viscoelastic viscosities and stresses.
-        */ 
-       Rheology::Elasticity<dim> elastic_rheology;
+        /**
+         * Object for computing viscoelastic viscosities and stresses.
+         */
+        Rheology::Elasticity<dim> elastic_rheology;
 
-      /**
-       * Whether to include viscoelasticity in the constitutive formulation.
-       */
-      bool use_elasticity;
+        /**
+         * Whether to include viscoelasticity in the constitutive formulation.
+         */
+        bool use_elasticity;
     };
 
   }
