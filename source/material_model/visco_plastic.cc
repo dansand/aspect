@@ -145,14 +145,14 @@ namespace aspect
       std::vector<bool> composition_yielding(volume_fractions.size());
 
       std::vector<double> composition_viscosities(volume_fractions.size());
- 
+
       std::vector<double> viscosities_ve(volume_fractions.size());
       std::vector<double> viscosities_vep(volume_fractions.size());
 
       std::vector<double> elastic_shear_moduli(volume_fractions.size());
 
       std::vector<double> stresses_ve(volume_fractions.size());
-  
+
       SymmetricTensor<2,dim> stress_old;
       if (use_elasticity == true)
         {
@@ -160,8 +160,8 @@ namespace aspect
             stress_old[SymmetricTensor<2,dim>::unrolled_to_component_indices(j)] = composition[j];
         }
 
-      double dte = 0.; 
-      
+      double dte = 0.;
+
       // Calculate viscosities for each of the individual compositional phases
       for (unsigned int j=0; j < volume_fractions.size(); ++j)
         {
@@ -215,7 +215,7 @@ namespace aspect
           // Step 1d: calculate the viscous stress magntiude
           const double viscous_stress = 2. * viscosity_pre_yield * edot_ii;
 
-          // Step 2: viscoelastic behavior 
+          // Step 2: viscoelastic behavior
           if (use_elasticity == true)
             {
               elastic_shear_moduli = elastic_rheology.get_elastic_shear_moduli();
@@ -242,11 +242,16 @@ namespace aspect
           const double current_friction = drucker_prager_parameters.angles_internal_friction[j] * weakening_factors[1];
           viscosity_pre_yield *= weakening_factors[2];
 
+          //step 3c: dynamic weakening
+          //const double mu  = mu_d[i] + (mu_s[i] - mu_d[i]) / ( (1 + strain_rate_dev_inv2/reference_strain_rate) );
+          const double dynamic_friction  = dynamic_angles_of_internal_friction[j] + (current_friction - dynamic_angles_of_internal_friction[j]) / ( (1 + edot_ii/dynamic_reference_strain_rate[j]) );
+
+
           // Step 4: plastic yielding
 
           // Step 4a: calculate Drucker-Prager yield stress
           const double yield_stress = drucker_prager_plasticity.compute_yield_stress(current_cohesion,
-                                                                                     current_friction,
+                                                                                     dynamic_friction,
                                                                                      std::max(pressure,0.0),
                                                                                      drucker_prager_parameters.max_yield_stress);
 
@@ -278,7 +283,7 @@ namespace aspect
               }
               case drucker_prager:
               {
-                // Step 4c-2: If the current stress is greater than the yield stress, 
+                // Step 4c-2: If the current stress is greater than the yield stress,
                 // rescale the viscosity back to the yield surface
                 if (current_stress >= yield_stress)
                   {
@@ -563,7 +568,7 @@ namespace aspect
       strain_rheology.compute_finite_strain_reaction_terms(in, out);
 
       if (use_elasticity)
-        { 
+        {
           elastic_rheology.fill_elastic_force_outputs(in, average_elastic_shear_moduli, out);
           elastic_rheology.fill_reaction_outputs(in, average_elastic_shear_moduli, out);
         }
@@ -695,6 +700,14 @@ namespace aspect
                            Patterns::Bool (),
                            "Whether to inlcude viscoelasticity in the rheological formulation. ");
 
+        //Dynamic friction paramters
+        prm.declare_entry ("Dynamic reference strain rate", "1e-15",
+                           Patterns::Double (0),
+                           "...Units: $1/s$.");
+
+        prm.declare_entry ("Dynamic angles of internal friction", "0",
+                           Patterns::List(Patterns::Double(0)),
+                           "...Units: degrees.");
 
         }
         prm.leave_subsection();
@@ -789,6 +802,16 @@ namespace aspect
                          ExcMessage("If adiabatic heating is enabled you should not add another adiabatic gradient"
                                     "to the temperature for computing the viscosity, because the ambient"
                                     "temperature profile already includes the adiabatic gradient."));
+
+          //
+          dynamic_reference_strain_rate = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Dynamic reference strain rate"))),
+                                                                          n_fields,
+                                                                          "Dynamic reference strain rate");
+
+          dynamic_angles_of_internal_friction = Utilities::possibly_extend_from_1_to_N (Utilities::string_to_double(Utilities::split_string_list(prm.get("Dynamic angles of internal friction"))),
+                                                                          n_fields,
+                                                                          "Dynamic angles of internal friction");
+
         }
         prm.leave_subsection();
       }
