@@ -1,0 +1,5 @@
+Changed: The ViscoPlastic material model now has the option to include
+viscoelastic deformation. Used in combination with existing functionality,
+this allows simulating viscoelastic-plastic deformation. 
+<br>
+(John Naliboff, 2019/12/02)
