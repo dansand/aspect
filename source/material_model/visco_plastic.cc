@@ -167,7 +167,7 @@ namespace aspect
         {
           // Calculate the square root of the second moment invariant for the deviatoric
           // strain rate tensor, including visocelastic stresses.
-          double edot_ii_ve;
+          double edot_ii_ve = 0.;
           if (use_elasticity == true)
             {
               const SymmetricTensor<2,dim> edot = 2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte);
