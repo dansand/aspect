@@ -161,6 +161,11 @@ namespace aspect
         }
 
       double dte = 0.;
+      if (use_elasticity == true)
+        {
+          dte = elastic_rheology.elastic_timestep();
+          elastic_shear_moduli = elastic_rheology.get_elastic_shear_moduli();
+        }
 
       // Calculate viscosities for each of the individual compositional phases
       for (unsigned int j=0; j < volume_fractions.size(); ++j)
@@ -170,12 +175,12 @@ namespace aspect
           double edot_ii_ve = 0.;
           if (use_elasticity == true)
             {
-              const SymmetricTensor<2,dim> edot = 2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte);
+              //const SymmetricTensor<2,dim> edot = 2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte);
               edot_ii_ve = ( (this->get_timestep_number() == 0 && strain_rate.norm() <= std::numeric_limits<double>::min() )
                              ?
                              ref_strain_rate
                              :
-                             std::max(std::sqrt(std::fabs(second_invariant(edot))), min_strain_rate) );
+                             std::max(std::sqrt(std::fabs(second_invariant(2. * (deviator(strain_rate)) + stress_old / (elastic_shear_moduli[j] * dte)))), min_strain_rate) );
             }
 
           // Step 1: viscous behavior
@@ -219,8 +224,6 @@ namespace aspect
           if (use_elasticity == true)
             {
               elastic_shear_moduli = elastic_rheology.get_elastic_shear_moduli();
-
-              dte = elastic_rheology.elastic_timestep();
 
               // Step 2a: calculate viscoelastic (effective) viscosity (eqn 28 in Moresi et al., 2003, J. Comp. Phys.)
               viscosities_ve[j] = viscosity_pre_yield * dte / (dte + (viscosity_pre_yield/elastic_shear_moduli[j]));

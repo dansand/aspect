@@ -180,10 +180,10 @@ namespace aspect
 
         // Functionality to average the additional RHS terms over the cell is not implemented.
         // This enforces that the variable 'Material averaging' is set to 'none'.
-        AssertThrow(this->get_parameters().material_averaging == MaterialModel::MaterialAveraging::none,
-                    ExcMessage("Material models with elasticity cannot be used with "
-                               "material averaging. The variable 'Material averaging' "
-                               "in the 'Material model' subsection must be set to 'none'."));
+        //AssertThrow(this->get_parameters().material_averaging == MaterialModel::MaterialAveraging::none,
+        //            ExcMessage("Material models with elasticity cannot be used with "
+        //                       "material averaging. The variable 'Material averaging' "
+        //                       "in the 'Material model' subsection must be set to 'none'."));
       }
 
 
