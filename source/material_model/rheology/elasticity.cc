@@ -173,10 +173,13 @@ namespace aspect
                      Parameters<dim>::NonlinearSolver::single_Advection_single_Stokes
                      ||
                      this->get_parameters().nonlinear_solver ==
+                     Parameters<dim>::NonlinearSolver::single_Advection_iterated_Newton_Stokes
+                     ||
+                     this->get_parameters().nonlinear_solver ==
                      Parameters<dim>::NonlinearSolver::single_Advection_iterated_Stokes),
                     ExcMessage("The material model will only work with the nonlinear "
                                "solver schemes 'single Advection, single Stokes' and "
-                               "'single Advection, iterated Stokes'"));
+                               "'single Advection, iterated Stokes'"));s
 
         // Functionality to average the additional RHS terms over the cell is not implemented.
         // This enforces that the variable 'Material averaging' is set to 'none'.
