@@ -176,6 +176,9 @@ namespace aspect
                      Parameters<dim>::NonlinearSolver::single_Advection_iterated_Newton_Stokes
                      ||
                      this->get_parameters().nonlinear_solver ==
+                     Parameters<dim>::NonlinearSolver::single_Advection_no_Stokes
+                     ||
+                     this->get_parameters().nonlinear_solver ==
                      Parameters<dim>::NonlinearSolver::single_Advection_iterated_Stokes),
                     ExcMessage("The material model will only work with the nonlinear "
                                "solver schemes 'single Advection, single Stokes' and "
