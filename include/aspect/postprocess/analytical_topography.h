@@ -85,6 +85,28 @@ namespace aspect
          * to be produced. Used to check for the next necessary output time.
          */
         double last_output_time;
+ 
+        /**
+         * The time at timestep t1 when the initial topography is added to
+         * the mesh. 
+         */
+        double t1;
+ 
+        /**
+         * The amplitude of the sinusoidal initial topography.
+         */
+        double amplitude;
+
+        /**
+         * The diffusivity used in computing the diffusion of the surface
+         * topography.
+         */
+        double kappa;
+
+        /**
+         * The width (X extent) of the 2D rectangular domain.
+         */
+        double domain_width;
 
         /**
          * A switch to vary between different analytical solutions.

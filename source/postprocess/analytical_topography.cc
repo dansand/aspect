@@ -70,16 +70,7 @@ namespace aspect
       // Set up some variables for the analytical solution of the
       // topography
       const unsigned int n_max = 5000;
-      const double time = this->get_time();
-
-      double domain_width = 1., kappa = 0.5;
-      if (analytical_solution_example == 1)
-        kappa = 1.;
-      else if (analytical_solution_example == 2)
-        {
-          kappa = 0.01;
-          domain_width = 100.;
-        }
+      const double time = this->get_time()-t1;
 
       // loop over all of the surface cells and save the elevation to stored_value
       typename parallel::distributed::Triangulation<dim>::active_cell_iterator cell = this->get_triangulation().begin_active(),
@@ -108,16 +99,18 @@ namespace aspect
                             // compute analytical solution and write out diff
                             double sum = 0.;
                             for (unsigned int n=1; n<=n_max; ++n)
-                              sum += std::cos(2.*n*numbers::PI*vertex[0])
-                                     * std::exp(-kappa*2.*n*n*numbers::PI*numbers::PI*time)
+                              sum += std::cos(2.*n*numbers::PI*vertex[0]/domain_width)
+                                     * std::exp(-kappa*2.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
                                      /(4.*n*n-1.);
-                            const double topo = 1./numbers::PI - 2./numbers::PI*sum;
+                            //const double topo = 1./numbers::PI - 2./numbers::PI*sum;
+                            // a0=4A/pi --> a0/2=2A/pi
+                            const double topo = 2.*amplitude/numbers::PI - 2./numbers::PI*sum;
 
                             output_file << vertex << ' '<< elevation << ' ' << topo << std::endl;
                           }
                         else if (analytical_solution_example == 2)
                           {
-                            const double topo = 50. * std::sin(vertex[0]*numbers::PI/domain_width)
+                            const double topo = amplitude * std::sin(vertex[0]*numbers::PI/domain_width)
                                                 * std::exp(-kappa*numbers::PI*numbers::PI*time/(domain_width*domain_width));
                             output_file << vertex << ' '<< elevation << ' ' << topo << std::endl;
                           }
@@ -262,6 +255,14 @@ namespace aspect
                              "Units: years if the "
                              "'Use years in output instead of seconds' parameter is set; "
                              "seconds otherwise.");
+          prm.declare_entry ("Time to t1", "0.00003",
+                             Patterns::Double (0),
+                             "The time of the second timestep (t1) "
+                             "at which the initial topography is added "
+                             "to the mesh. "
+                             "Units: years if the "
+                             "'Use years in output instead of seconds' parameter is set; "
+                             "seconds otherwise.");
           prm.declare_entry ("Analytical solution of example", "1",
                              Patterns::Integer (0),
                              "The number of the diffusion example for "
@@ -269,6 +270,16 @@ namespace aspect
                              "For a value of 0, we do not write the "
                              "analytical solution. "
                              "Units: -. ");
+          prm.declare_entry ("Diffusivity", "0.5",
+                             Patterns::Double (0),
+                             "The diffusivity in the diffusion equation. "
+                             "Units: m2/yr. ");
+          prm.declare_entry ("Initial sinusoidal topography amplitude", "0.5",
+                             Patterns::Double (0),
+                             "The maximum amplitude of the sinusoidal topography "
+                             "that is added at the second timestep (t1) "
+                             "to the mesh. "
+                             "Units: m. ");
         }
         prm.leave_subsection();
       }
@@ -286,9 +297,24 @@ namespace aspect
         {
           write_to_file        = prm.get_bool ("Output to file");
           output_interval = prm.get_double ("Time between text output");
+          t1 = prm.get_double ("Time to t1");
           if (this->convert_output_to_years())
+          {
             output_interval *= year_in_seconds;
+            t1 *= year_in_seconds;
+          } 
           analytical_solution_example = prm.get_double ("Analytical solution of example");
+          kappa = prm.get_double ("Diffusivity");
+          amplitude = prm.get_double ("Initial sinusoidal topography amplitude");
+        }
+        prm.leave_subsection();
+      }
+      prm.leave_subsection();
+      prm.enter_subsection("Geometry model");
+      {
+        prm.enter_subsection("Box");
+        {
+          domain_width = prm.get_double ("X extent");
         }
         prm.leave_subsection();
       }
