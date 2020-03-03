@@ -155,7 +155,7 @@ namespace aspect
       // The nr of shape functions per mesh deformation element
       const unsigned int dofs_per_cell = mesh_deformation_dof_handler.get_fe().dofs_per_cell;
 
-      // Map of local to global cell doff indices
+      // Map of local to global cell dof indices
       std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
 
       // The local rhs vector
@@ -171,9 +171,12 @@ namespace aspect
 
       // The global displacements on the MeshDeformation FE
       LinearAlgebra::Vector displacements = this->get_mesh_deformation_handler().get_mesh_displacements();
+      displacements.print(std::cout);
 
       // The global initial topography on the MeshDeformation FE
-      LinearAlgebra::Vector initial_topography; // = this->get_mesh_deformation_handler().get_initial_topography();
+      //LinearAlgebra::Vector initial_topography; // = this->get_mesh_deformation_handler().get_initial_topography();
+      LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_mesh_displacements();
+      initial_topography = 0;
 
       // Do nothing at time zero
       if (this->get_timestep_number() == 0)
@@ -283,6 +286,7 @@ namespace aspect
       LinearAlgebra::PreconditionJacobi preconditioner_mass;
       preconditioner_mass.initialize(mass_matrix);
 
+      this->get_pcout() << "Solving mesh surface diffusion " << std::endl;
       SolverControl solver_control(5*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
@@ -364,6 +368,7 @@ namespace aspect
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
                             "and depositional processes. ");
+          //TODO why two timestep parameters?
           prm.declare_entry("Diffusion timestep", "2000",
                             Patterns::Double(0),
                             "The timestep used in the solving of the diffusion "
