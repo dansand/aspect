@@ -227,6 +227,8 @@ namespace aspect
       const unsigned int n_face_q_points = fe_face_values.n_quadrature_points,
                          dofs_per_cell = fs_fe_face_values.dofs_per_cell;
 
+	  this->get_pcout() << "FE: n_face_q_points: " << n_face_q_points << ", FSFE: dofs_per_cell: " << dofs_per_cell << ", FSFE: n_face_q_points: " << fs_fe_face_values.n_quadrature_points << std::endl;
+
       // stuff for assembling system
       std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
       Vector<double> cell_vector (dofs_per_cell);
@@ -307,15 +309,27 @@ namespace aspect
 
                 cell_vector = 0;
                 cell_matrix = 0;
+                Tensor<1,dim> direction;
+                if (advection_direction == SurfaceAdvection::geometric_normal)
+                // Only for 2D
+                {
+                      Tensor<1,dim> tangent = (fs_fe_face_values.quadrature_point(n_face_q_points-1) - fs_fe_face_values.quadrature_point(0));
+                      direction[0] = -tangent[1];
+                      direction[1] = tangent[0];
+                      // Check that normal points upwards
+                      if (direction[1] < 0)
+                        direction *= -1.;
+                }
                 for (unsigned int point=0; point<n_face_q_points; ++point)
                   {
                     // Select the direction onto which to project the velocity solution
-                    Tensor<1,dim> direction;
                     if ( advection_direction == SurfaceAdvection::normal ) // project onto normal vector
+                    {
                       direction = fs_fe_face_values.normal_vector(point);
+                    }
                     else if ( advection_direction == SurfaceAdvection::vertical ) // project onto local gravity
                       direction = this->get_gravity_model().gravity_vector(fs_fe_face_values.quadrature_point(point));
-                    else
+                    else if (advection_direction != SurfaceAdvection::geometric_normal)
                       AssertThrow(false, ExcInternalError());
 
                     direction *= ( direction.norm() > 0.0 ? 1./direction.norm() : 0.0 );
@@ -421,7 +435,7 @@ namespace aspect
                             "where zero is no stabilization, and one is fully "
                             "implicit.");
           prm.declare_entry("Surface velocity projection", "normal",
-                            Patterns::Selection("normal|vertical"),
+                            Patterns::Selection("normal|vertical|geometric normal"),
                             "After each time step the free surface must be "
                             "advected in the direction of the velocity field. "
                             "Mass conservation requires that the mesh velocity "
@@ -455,6 +469,8 @@ namespace aspect
             advection_direction = SurfaceAdvection::normal;
           else if ( advection_dir == "vertical")
             advection_direction = SurfaceAdvection::vertical;
+          else if ( advection_dir == "geometric normal")
+            advection_direction = SurfaceAdvection::geometric_normal;
           else
             AssertThrow(false, ExcMessage("The surface velocity projection must be ``normal'' or ``vertical''."));
         }
