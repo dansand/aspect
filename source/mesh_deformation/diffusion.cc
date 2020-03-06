@@ -171,9 +171,11 @@ namespace aspect
 
       // The global displacements on the MeshDeformation FE
       LinearAlgebra::Vector displacements = this->get_mesh_deformation_handler().get_mesh_displacements();
-      displacements.print(std::cout);
+      //displacements.print(std::cout);
 
       // The global initial topography on the MeshDeformation FE
+      // TODO I've not implemented storing the initial topography again,
+      // so set it to zero.
       //LinearAlgebra::Vector initial_topography; // = this->get_mesh_deformation_handler().get_initial_topography();
       LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_mesh_displacements();
       initial_topography = 0;
@@ -209,11 +211,11 @@ namespace aspect
                 if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
                   continue;
 
-                // Get the global numbers of the local DoFs of the mesh deformation cell
-                fscell->get_dof_indices (cell_dof_indices);
-
                 // Recompute values, gradients, etc on the faces
                 fs_fe_face_values.reinit (fscell, face_no);
+
+                // Get the global numbers of the local DoFs of the mesh deformation cell
+                fscell->get_dof_indices (cell_dof_indices);
 
                 // Extract the displacement values
                 fs_fe_face_values[extract_vertical_displacements].get_function_values (displacements, displacement_values);
@@ -229,7 +231,7 @@ namespace aspect
                 for (unsigned int point=0; point<n_fs_face_q_points; ++point)
                   {
                     // Get the gravity vector to compute the outward direction of displacement
-                    Tensor<1,dim> direction = this->get_gravity_model().gravity_vector(fs_fe_face_values.quadrature_point(point));
+                    Tensor<1,dim> direction = -(this->get_gravity_model().gravity_vector(fs_fe_face_values.quadrature_point(point)));
                     // Normalize direction vector
                     if (direction.norm() > 0.0)
                       direction *= 1./direction.norm();
@@ -241,27 +243,29 @@ namespace aspect
                     // i.e. the initial topography + any additional mesh displacement.
                     const double displacement = (displacement_values[point] * direction) + (initial_topography_values[point] * direction);
 
+                    // To project onto the tangent space of the surface,
+                    // we define the projection P:= I- n x n,
+                    // with I the unit tensor and n the unit normal to the surface.
+                    // The surface gradient then is P times the usual gradient of the shape functions.
+                    const Tensor<2, dim, double> projection = unit_symmetric_tensor<dim>() -
+                                                              outer_product(fs_fe_face_values.normal_vector(point), fs_fe_face_values.normal_vector(point));
+
                     // Loop over the shape functions
                     for (unsigned int i=0; i<dofs_per_cell; ++i)
                       {
-                        // Assemble the RHS
-                        // RHS = M*H_old
-                        cell_vector(i) += displacement *
-                                          fs_fe_face_values.shape_value (i, point) *
-                                          /*fs_fe_face_values.shape_value (j, point) * */
-                                          fs_fe_face_values.JxW(point);
+
 
                         for (unsigned int j=0; j<dofs_per_cell; ++j)
                           {
+                            // Assemble the RHS
+                            // RHS = M*H_old
+                            cell_vector(i) += displacement *
+                                              fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point) *
+                                              fs_fe_face_values.JxW(point);
+
+
                             // Assemble the matrix, for backward first order time discretization:
                             // Matrix := (M+dt*K) = (M+dt*B^T*kappa*B)
-                            // To project onto the tangent space of the surface,
-                            // we define the projection P:= I- n x n,
-                            // with I the unit tensor and n the unit normal to the surface.
-                            // The surface gradient then is P times the usual gradient of the shape functions.
-                            const Tensor<2, dim, double> projection = unit_symmetric_tensor<dim>() -
-                                                                      outer_product(fs_fe_face_values.normal_vector(point), fs_fe_face_values.normal_vector(point));
-
                             cell_matrix(i,j) +=
                               (
                                 this->get_timestep() * diffusivity *
@@ -286,7 +290,7 @@ namespace aspect
       LinearAlgebra::PreconditionJacobi preconditioner_mass;
       preconditioner_mass.initialize(mass_matrix);
 
-      this->get_pcout() << "Solving mesh surface diffusion " << std::endl;
+      this->get_pcout() << "   Solving mesh surface diffusion " << std::endl;
       SolverControl solver_control(5*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
