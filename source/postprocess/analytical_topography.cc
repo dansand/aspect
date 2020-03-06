@@ -96,17 +96,28 @@ namespace aspect
                           output_file << vertex << ' '<< elevation << std::endl;
                         else if (analytical_solution_example == 1)
                           {
-                            // compute analytical solution and write out diff
-                            double sum = 0.;
-                            for (unsigned int n=1; n<=n_max; ++n)
-                              sum += std::cos(2.*n*numbers::PI*vertex[0]/domain_width)
-                                     * std::exp(-kappa*2.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
-                                     /(4.*n*n-1.);
-                            //const double topo = 1./numbers::PI - 2./numbers::PI*sum;
-                            // a0=4A/pi --> a0/2=2A/pi
-                            const double topo = 2.*amplitude/numbers::PI - 2./numbers::PI*sum;
-
-                            output_file << vertex << ' '<< elevation << ' ' << topo << std::endl;
+                        	double topo = 0;
+                        	if ( time < 0. )
+                        		topo = 0;
+                        	// initial topography
+                        	else if (time < t1/10.)
+                        		topo = amplitude * std::sin(numbers::PI*vertex[0]/domain_width);
+                        	else
+                        	{
+                        		// compute analytical solution
+                        		double sum = 0.;
+                        		for (unsigned int n=1; n<=n_max; ++n)
+                        		{
+                        			sum += std::cos(2.*n*numbers::PI*vertex[0]/domain_width)
+                        			* std::exp(-kappa*4.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
+                        			/((4.*n*n)-1.)
+									* -4.*amplitude/numbers::PI;
+                        		}
+                        		// a0=4A/pi --> a0/2=2A/pi
+                        		topo = 2.*amplitude/numbers::PI + sum;
+                        	}
+                        	// write out predicted and analytical topography
+                        	output_file << vertex << ' '<< elevation << ' ' << topo << ' ' << time << std::endl;
                           }
                         else if (analytical_solution_example == 2)
                           {
@@ -273,7 +284,7 @@ namespace aspect
           prm.declare_entry ("Diffusivity", "0.5",
                              Patterns::Double (0),
                              "The diffusivity in the diffusion equation. "
-                             "Units: m2/yr. ");
+                             "Units: m2/s. ");
           prm.declare_entry ("Initial sinusoidal topography amplitude", "0.5",
                              Patterns::Double (0),
                              "The maximum amplitude of the sinusoidal topography "
