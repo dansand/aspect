@@ -78,11 +78,7 @@ namespace aspect
                                           LinearAlgebra::Vector &output,
                                           const std::set<types::boundary_id> boundary_ids) const
     {
-      // Set up the system to solve
-      LinearAlgebra::SparseMatrix mass_matrix;
-      LinearAlgebra::Vector system_rhs, solution;
-      system_rhs.reinit(mesh_locally_owned, this->get_mpi_communicator());
-      solution.reinit(mesh_locally_owned, this->get_mpi_communicator());
+
 
       // Set up constraints
       ConstraintMatrix mass_matrix_constraints(mesh_locally_relevant);
@@ -106,15 +102,22 @@ namespace aspect
 //          {
 //            x_no_flux_boundary_indicators.erase(*p);
 //          }
-//
-//      // Make the no flux boundary constraints
+
+      // Make the no flux boundary constraints
 //      VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
 //                                                       /* first_vector_component= */
 //                                                       0,
 //                                                       x_no_flux_boundary_indicators,
 //                                                       mass_matrix_constraints, this->get_mapping());
+
       mass_matrix_constraints.close();
 
+
+      // Set up the system to solve
+      LinearAlgebra::SparseMatrix mass_matrix;
+      LinearAlgebra::Vector system_rhs, solution;
+      system_rhs.reinit(mesh_locally_owned, this->get_mpi_communicator());
+      solution.reinit(mesh_locally_owned, this->get_mpi_communicator());
       // Sparsity of the matrix
 #ifdef ASPECT_USE_PETSC
       LinearAlgebra::DynamicSparsityPattern sp(mesh_locally_relevant);
@@ -171,17 +174,16 @@ namespace aspect
 
       // The global displacements on the MeshDeformation FE
       LinearAlgebra::Vector displacements = this->get_mesh_deformation_handler().get_mesh_displacements();
-      //displacements.print(std::cout);
 
       // The global initial topography on the MeshDeformation FE
-      // TODO I've not implemented storing the initial topography again,
-      // so set it to zero.
-      //LinearAlgebra::Vector initial_topography; // = this->get_mesh_deformation_handler().get_initial_topography();
-      LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_mesh_displacements();
-      initial_topography = 0;
+      // TODO find another way to get to the initial topography?
+      LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_initial_topography();
+      // In case we don't store the initial topography, set it to zero.
+//      LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_mesh_displacements();
+//      initial_topography = 0;
 
       // Do nothing at time zero
-      if (this->get_timestep_number() == 0)
+      if (this->get_timestep_number() < 1)
         return;
 
       // An extractor for the dim-valued displacement vectors
@@ -290,8 +292,8 @@ namespace aspect
       LinearAlgebra::PreconditionJacobi preconditioner_mass;
       preconditioner_mass.initialize(mass_matrix);
 
-      this->get_pcout() << "   Solving mesh surface diffusion " << std::endl;
-      SolverControl solver_control(5*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
+      this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
+      SolverControl solver_control(5.*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
 
@@ -307,7 +309,10 @@ namespace aspect
       d_displacement -= displacements;
       d_displacement -= initial_topography;
       // The velocity
+      if (this->get_timestep() > 0.)
       d_displacement /= this->get_timestep();
+      else
+    	  d_displacement = 0.;
 
       output = d_displacement;
     }
