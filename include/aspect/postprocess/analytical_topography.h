@@ -85,13 +85,13 @@ namespace aspect
          * to be produced. Used to check for the next necessary output time.
          */
         double last_output_time;
- 
+
         /**
          * The time at timestep t1 when the initial topography is added to
-         * the mesh. 
+         * the mesh.
          */
         double t1;
- 
+
         /**
          * The amplitude of the sinusoidal initial topography.
          */

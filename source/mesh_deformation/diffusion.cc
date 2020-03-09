@@ -310,9 +310,9 @@ namespace aspect
       d_displacement -= initial_topography;
       // The velocity
       if (this->get_timestep() > 0.)
-      d_displacement /= this->get_timestep();
+        d_displacement /= this->get_timestep();
       else
-    	  d_displacement = 0.;
+        d_displacement = 0.;
 
       output = d_displacement;
     }
