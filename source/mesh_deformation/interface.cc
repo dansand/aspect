@@ -616,67 +616,67 @@ namespace aspect
 
 
     template <int dim>
-        void MeshDeformationHandler<dim>::set_initial_topography()
-        {
-    	std::cout << "Setting initial topo " << std::endl;
-          mesh_locally_owned = mesh_deformation_dof_handler.locally_owned_dofs();
-          LinearAlgebra::Vector distributed_initial_topography;
-          distributed_initial_topography.reinit(mesh_locally_owned, sim.mpi_communicator);
+    void MeshDeformationHandler<dim>::set_initial_topography()
+    {
+      std::cout << "Setting initial topo " << std::endl;
+      mesh_locally_owned = mesh_deformation_dof_handler.locally_owned_dofs();
+      LinearAlgebra::Vector distributed_initial_topography;
+      distributed_initial_topography.reinit(mesh_locally_owned, sim.mpi_communicator);
 
-          const std::vector<Point<dim> > support_points
-            = mesh_deformation_fe.base_element(0).get_unit_support_points();
+      const std::vector<Point<dim> > support_points
+        = mesh_deformation_fe.base_element(0).get_unit_support_points();
 
-          const Quadrature<dim> quad(support_points);
-          const UpdateFlags update_flags = UpdateFlags(update_quadrature_points);
-          FEValues<dim> fs_fe_values (*sim.mapping, mesh_deformation_fe, quad, update_flags);
-          const unsigned int n_q_points = fs_fe_values.n_quadrature_points,
-                             dofs_per_cell = fs_fe_values.dofs_per_cell;
+      const Quadrature<dim> quad(support_points);
+      const UpdateFlags update_flags = UpdateFlags(update_quadrature_points);
+      FEValues<dim> fs_fe_values (*sim.mapping, mesh_deformation_fe, quad, update_flags);
+      const unsigned int n_q_points = fs_fe_values.n_quadrature_points,
+                         dofs_per_cell = fs_fe_values.dofs_per_cell;
 
-          std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
+      std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
 
-          typename DoFHandler<dim>::active_cell_iterator cell = mesh_deformation_dof_handler.begin_active(),
-                                                         endc = mesh_deformation_dof_handler.end();
+      typename DoFHandler<dim>::active_cell_iterator cell = mesh_deformation_dof_handler.begin_active(),
+                                                     endc = mesh_deformation_dof_handler.end();
 
-          for (; cell!=endc; ++cell)
-            if (cell->is_locally_owned())
+      for (; cell!=endc; ++cell)
+        if (cell->is_locally_owned())
+          {
+            cell->get_dof_indices (cell_dof_indices);
+
+            fs_fe_values.reinit (cell);
+            for (unsigned int j=0; j<n_q_points; ++j)
               {
-                cell->get_dof_indices (cell_dof_indices);
-
-                fs_fe_values.reinit (cell);
-                for (unsigned int j=0; j<n_q_points; ++j)
+                // In case of initial topography,
+                // add it
+                if (include_initial_topography)
                   {
-                    // In case of initial topography,
-                    // add it
-                    if (include_initial_topography)
+                    Point<dim-1> surface_point;
+                    std::array<double, dim> natural_coord = this->get_geometry_model().cartesian_to_natural_coordinates(fs_fe_values.quadrature_point(j));
+                    if (const GeometryModel::Box<dim> *geometry = dynamic_cast<const GeometryModel::Box<dim>*> (&this->get_geometry_model()))
                       {
-                        Point<dim-1> surface_point;
-                        std::array<double, dim> natural_coord = this->get_geometry_model().cartesian_to_natural_coordinates(fs_fe_values.quadrature_point(j));
-                        if (const GeometryModel::Box<dim> *geometry = dynamic_cast<const GeometryModel::Box<dim>*> (&this->get_geometry_model()))
-                          {
-                            for (unsigned int d=0; d<dim-1; ++d)
-                              surface_point[d] = natural_coord[d];
-                          }
-                        else
-                          {
-                            for (unsigned int d=1; d<dim; ++d)
-                              surface_point[d] = natural_coord[d];
-                          }
-                        // TODO get the initial node displacement by
-                        // looping over the Stokes FE mesh.
-                        // Get the topography at this point.
-                        const double topo = topo_model->value(surface_point);
-
-                        // TODO adapt to radial topography
-                        const unsigned int support_point_index
-                          = mesh_deformation_fe.component_to_system_index(dim-1,/*dof index within component=*/ j);
-                        distributed_initial_topography[cell_dof_indices[support_point_index]] = topo;
+                        for (unsigned int d=0; d<dim-1; ++d)
+                          surface_point[d] = natural_coord[d];
                       }
+                    else
+                      {
+                        for (unsigned int d=1; d<dim; ++d)
+                          surface_point[d] = natural_coord[d];
+                      }
+                    // TODO get the initial node displacement by
+                    // looping over the Stokes FE mesh.
+                    // Get the topography at this point.
+                    const double topo = topo_model->value(surface_point);
+
+                    // TODO adapt to radial topography
+                    const unsigned int support_point_index
+                      = mesh_deformation_fe.component_to_system_index(dim-1,/*dof index within component=*/ j);
+                    distributed_initial_topography[cell_dof_indices[support_point_index]] = topo;
                   }
               }
+          }
 
-          distributed_initial_topography.compress(VectorOperation::insert);
-          initial_topography = distributed_initial_topography;
-        }
+      distributed_initial_topography.compress(VectorOperation::insert);
+      initial_topography = distributed_initial_topography;
+    }
 
 
     template <int dim>
