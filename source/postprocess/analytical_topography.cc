@@ -70,7 +70,8 @@ namespace aspect
       // Set up some variables for the analytical solution of the
       // topography
       const unsigned int n_max = 5000;
-      const double time = this->get_time()-t1;
+//      const double time = this->get_time()-t1;
+      const double time = this->get_time();
 
       // loop over all of the surface cells and save the elevation to stored_value
       typename parallel::distributed::Triangulation<dim>::active_cell_iterator cell = this->get_triangulation().begin_active(),
@@ -96,28 +97,28 @@ namespace aspect
                           output_file << vertex << ' '<< elevation << std::endl;
                         else if (analytical_solution_example == 1)
                           {
-                        	double topo = 0;
-                        	if ( time < 0. )
-                        		topo = 0;
-                        	// initial topography
-                        	else if (time < t1/10.)
-                        		topo = amplitude * std::sin(numbers::PI*vertex[0]/domain_width);
-                        	else
-                        	{
-                        		// compute analytical solution
-                        		double sum = 0.;
-                        		for (unsigned int n=1; n<=n_max; ++n)
-                        		{
-                        			sum += std::cos(2.*n*numbers::PI*vertex[0]/domain_width)
-                        			* std::exp(-kappa*4.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
-                        			/((4.*n*n)-1.)
-									* -4.*amplitude/numbers::PI;
-                        		}
-                        		// a0=4A/pi --> a0/2=2A/pi
-                        		topo = 2.*amplitude/numbers::PI + sum;
-                        	}
-                        	// write out predicted and analytical topography
-                        	output_file << vertex << ' '<< elevation << ' ' << topo << ' ' << time << std::endl;
+                            double topo = 0;
+                            if ( time < 0. )
+                              topo = 0;
+                            // initial topography
+                            else if (time < t1/10.)
+                              topo = amplitude * std::sin(numbers::PI*vertex[0]/domain_width);
+                            else
+                              {
+                                // compute analytical solution
+                                double sum = 0.;
+                                for (unsigned int n=1; n<=n_max; ++n)
+                                  {
+                                    sum += std::cos(2.*n*numbers::PI*vertex[0]/domain_width)
+                                           * std::exp(-kappa*4.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
+                                           /((4.*n*n)-1.)
+                                           * -4.*amplitude/numbers::PI;
+                                  }
+                                // a0=4A/pi --> a0/2=2A/pi
+                                topo = 2.*amplitude/numbers::PI + sum;
+                              }
+                            // write out predicted and analytical topography
+                            output_file << vertex << ' '<< elevation << ' ' << topo << ' ' << time << std::endl;
                           }
                         else if (analytical_solution_example == 2)
                           {
@@ -310,10 +311,10 @@ namespace aspect
           output_interval = prm.get_double ("Time between text output");
           t1 = prm.get_double ("Time to t1");
           if (this->convert_output_to_years())
-          {
-            output_interval *= year_in_seconds;
-            t1 *= year_in_seconds;
-          } 
+            {
+              output_interval *= year_in_seconds;
+              t1 *= year_in_seconds;
+            }
           analytical_solution_example = prm.get_double ("Analytical solution of example");
           kappa = prm.get_double ("Diffusivity");
           amplitude = prm.get_double ("Initial sinusoidal topography amplitude");
