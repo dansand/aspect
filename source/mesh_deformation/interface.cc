@@ -111,7 +111,6 @@ namespace aspect
       // in a similar way as the mesh displacements.
       if (dynamic_cast<InitialTopographyModel::ZeroTopography<dim>*>(topo_model) == nullptr)
         include_initial_topography = true;
-      std::cout << "Include init topo? " << include_initial_topography << std::endl;
     }
 
 
