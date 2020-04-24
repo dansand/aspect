@@ -23,6 +23,8 @@
 #include <aspect/simulator_signals.h>
 #include <aspect/gravity_model/interface.h>
 #include <aspect/geometry_model/interface.h>
+#include <aspect/geometry_model/box.h>
+#include <aspect/geometry_model/two_merged_boxes.h>
 #include <aspect/simulator/assemblers/interface.h>
 #include <aspect/melt.h>
 #include <aspect/simulator.h>
@@ -53,6 +55,9 @@ namespace aspect
     void
     Diffusion<dim>::initialize ()
     {
+      AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
+                  Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
+                  ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries. "));
     }
 
 
@@ -95,20 +100,20 @@ namespace aspect
       // The list of boundary indicators for which we need to set
       // no_normal_flux_constraints, which means all
       // minus the diffusion mesh deformation boundary indicators.
-//      std::set< types::boundary_id > x_no_flux_boundary_indicators = this->get_geometry_model().get_used_boundary_indicators();
-//      for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
-//           p != x_no_flux_boundary_indicators.end(); ++p)
-//        if (boundary_ids.find(*p) != boundary_ids.end())
-//          {
-//            x_no_flux_boundary_indicators.erase(*p);
-//          }
+      std::set< types::boundary_id > x_no_flux_boundary_indicators = this->get_geometry_model().get_used_boundary_indicators();
+      for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
+           p != x_no_flux_boundary_indicators.end(); ++p)
+        if (boundary_ids.find(*p) != boundary_ids.end())
+          {
+            x_no_flux_boundary_indicators.erase(*p);
+          }
 
       // Make the no flux boundary constraints
-//      VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
-//                                                       /* first_vector_component= */
-//                                                       0,
-//                                                       x_no_flux_boundary_indicators,
-//                                                       mass_matrix_constraints, this->get_mapping());
+      VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
+                                                       /* first_vector_component= */
+                                                       0,
+                                                       x_no_flux_boundary_indicators,
+                                                       mass_matrix_constraints, this->get_mapping());
 
       mass_matrix_constraints.close();
 
@@ -255,17 +260,24 @@ namespace aspect
                     // Loop over the shape functions
                     for (unsigned int i=0; i<dofs_per_cell; ++i)
                       {
+                        // Make sure we only assemble for the y-component
+                        // TODO this is only correct for box geometries
+                        if (mesh_deformation_dof_handler.get_fe().system_to_component_index(i).first != dim-1)
+                          continue;
+
+                        // Assemble the RHS
+                        // RHS = M*H_old
+                        cell_vector(i) += displacement *
+                                          fs_fe_face_values.shape_value (i, point) * 
+                                          fs_fe_face_values.JxW(point);
 
 
                         for (unsigned int j=0; j<dofs_per_cell; ++j)
                           {
-                            // Assemble the RHS
-                            // RHS = M*H_old
-                            cell_vector(i) += displacement *
-                                              fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point) *
-                                              fs_fe_face_values.JxW(point);
-
-
+                            // Make sure we only assemble for the y-component
+                            // TODO this is only correct for box geometries
+                            if (mesh_deformation_dof_handler.get_fe().system_to_component_index(j).first != dim-1)
+                              continue;
                             // Assemble the matrix, for backward first order time discretization:
                             // Matrix := (M+dt*K) = (M+dt*B^T*kappa*B)
                             cell_matrix(i,j) +=
@@ -293,7 +305,7 @@ namespace aspect
       preconditioner_mass.initialize(mass_matrix);
 
       this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
-      SolverControl solver_control(5.*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
+      SolverControl solver_control(50.*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
 
