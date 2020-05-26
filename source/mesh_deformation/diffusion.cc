@@ -103,18 +103,18 @@ namespace aspect
       // The list of boundary indicators fow which we need to set
       // zero mesh velocities, which means the zero/prescribed Stokes velocity
       // boundaries minus those that are listed as Additional
-      // tangential boundary indicators. 
+      // tangential boundary indicators.
       std::set<types::boundary_id> x_zero_boundary_indicators = zero_boundary_velocity_indicators;
       x_zero_boundary_indicators.insert(prescribed_boundary_velocity_indicators.begin(), prescribed_boundary_velocity_indicators.end());
       for (std::set<types::boundary_id>::const_iterator p = x_zero_boundary_indicators.begin();
            p != x_zero_boundary_indicators.end(); ++p)
         if (boundary_ids.find(*p) == boundary_ids.end())
-         if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
-          {
-            std::cout << "Setting zero mesh vel for BI: " << *p << std::endl;
-            VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                      ZeroFunction<dim>(dim), mass_matrix_constraints);
-          }
+          if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
+            {
+              std::cout << "Setting zero mesh vel for BI: " << *p << std::endl;
+              VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
+                                                        ZeroFunction<dim>(dim), mass_matrix_constraints);
+            }
 
       // The list of boundary indicators for which we need to set
       // no_normal_flux_constraints, which means all
@@ -124,13 +124,13 @@ namespace aspect
       x_no_flux_boundary_indicators.insert(additional_tangential_mesh_boundary_indicators.begin(),additional_tangential_mesh_boundary_indicators.end());
       for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
            p != x_no_flux_boundary_indicators.end(); ++p)
-        if (boundary_ids.find(*p) != boundary_ids.end()) 
+        if (boundary_ids.find(*p) != boundary_ids.end())
           {
             std::cout << "Unsetting no normal flux mesh vel for BI: " << *p << std::endl;
             x_no_flux_boundary_indicators.erase(*p);
           }
       for (auto bi : x_no_flux_boundary_indicators)
-         std::cout << "No normal flux BI: " << bi << std::endl;
+        std::cout << "No normal flux BI: " << bi << std::endl;
 
       // Make the no flux boundary constraints
       VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
@@ -292,7 +292,7 @@ namespace aspect
                         // Assemble the RHS
                         // RHS = M*H_old
                         cell_vector(i) += displacement *
-                                          fs_fe_face_values.shape_value (i, point) * 
+                                          fs_fe_face_values.shape_value (i, point) *
                                           fs_fe_face_values.JxW(point);
 
 
@@ -451,19 +451,19 @@ namespace aspect
       // The list of tangential Stokes velocity boundary indicators.
       tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
       for (auto bi : tangential_boundary_velocity_indicators)
-         std::cout << "Tangential vel BI: " << bi << std::endl;
+        std::cout << "Tangential vel BI: " << bi << std::endl;
       // The list of zero Stokes velocity boundary indicators.
       zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
       for (auto bi : zero_boundary_velocity_indicators)
-         std::cout << "Zero vel BI: " << bi << std::endl;
+        std::cout << "Zero vel BI: " << bi << std::endl;
       // The list of prescribed Stokes velocity boundary indicators.
-      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators = 
-           this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
+      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
+        this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
       for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
            p != active_boundary_velocity_indicators.end(); ++p)
-           prescribed_boundary_velocity_indicators.insert(p->first);
+        prescribed_boundary_velocity_indicators.insert(p->first);
       for (auto bi : prescribed_boundary_velocity_indicators)
-         std::cout << "Prescribed vel BI: " << bi << std::endl;
+        std::cout << "Prescribed vel BI: " << bi << std::endl;
 
       prm.enter_subsection ("Mesh deformation");
       {
@@ -472,10 +472,10 @@ namespace aspect
           {
             const std::vector<types::boundary_id> x_additional_tangential_mesh_boundary_indicators
               = this->get_geometry_model().translate_symbolic_boundary_names_to_ids(Utilities::split_string_list
-                                                                             (prm.get ("Additional tangential mesh velocity boundary indicators")));
+                                                                                    (prm.get ("Additional tangential mesh velocity boundary indicators")));
 
             additional_tangential_mesh_boundary_indicators.insert(x_additional_tangential_mesh_boundary_indicators.begin(),
-                                                       x_additional_tangential_mesh_boundary_indicators.end());
+                                                                  x_additional_tangential_mesh_boundary_indicators.end());
           }
         catch (const std::string &error)
           {
