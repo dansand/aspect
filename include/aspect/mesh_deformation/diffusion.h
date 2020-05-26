@@ -127,6 +127,27 @@ namespace aspect
          * Not used.
          */
         double current_time;
+
+        /**
+         * Boundaries along which the Stokes velocity is set to tangential.
+         */
+        std::set<types::boundary_id> tangential_boundary_velocity_indicators;
+
+        /**
+         * Boundaries along which the mesh is allowed to move tangentially
+         * despite of the Stokes velocity boundary conditions.
+         */
+        std::set<types::boundary_id> additional_tangential_mesh_boundary_indicators;
+
+        /**
+         * Boundaries along which the Stokes velocity is set to zero.
+         */
+        std::set<types::boundary_id> zero_boundary_velocity_indicators;
+
+        /**
+         * Boundaries along which the Stokes velocity is prescribed.
+         */
+        std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
     };
   }
 }

@@ -34,6 +34,9 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/numerics/data_out.h>
+#include <deal.II/lac/precondition.h>
+#include <deal.II/lac/trilinos_precondition.h>
 
 namespace aspect
 {
@@ -97,16 +100,37 @@ namespace aspect
       // TODO What constraints do we want?
       // For now just assume Neumann BC
 
+      // The list of boundary indicators fow which we need to set
+      // zero mesh velocities, which means the zero/prescribed Stokes velocity
+      // boundaries minus those that are listed as Additional
+      // tangential boundary indicators. 
+      std::set<types::boundary_id> x_zero_boundary_indicators = zero_boundary_velocity_indicators;
+      x_zero_boundary_indicators.insert(prescribed_boundary_velocity_indicators.begin(), prescribed_boundary_velocity_indicators.end());
+      for (std::set<types::boundary_id>::const_iterator p = x_zero_boundary_indicators.begin();
+           p != x_zero_boundary_indicators.end(); ++p)
+        if (boundary_ids.find(*p) == boundary_ids.end())
+         if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
+          {
+            std::cout << "Setting zero mesh vel for BI: " << *p << std::endl;
+            VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
+                                                      ZeroFunction<dim>(dim), mass_matrix_constraints);
+          }
+
       // The list of boundary indicators for which we need to set
       // no_normal_flux_constraints, which means all
-      // minus the diffusion mesh deformation boundary indicators.
-      std::set< types::boundary_id > x_no_flux_boundary_indicators = this->get_geometry_model().get_used_boundary_indicators();
+      // minus the diffusion mesh deformation boundary indicators
+      // and minus the zero/prescribed Stokes velocity boundary indicators.
+      std::set<types::boundary_id> x_no_flux_boundary_indicators = tangential_boundary_velocity_indicators;
+      x_no_flux_boundary_indicators.insert(additional_tangential_mesh_boundary_indicators.begin(),additional_tangential_mesh_boundary_indicators.end());
       for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
            p != x_no_flux_boundary_indicators.end(); ++p)
-        if (boundary_ids.find(*p) != boundary_ids.end())
+        if (boundary_ids.find(*p) != boundary_ids.end()) 
           {
+            std::cout << "Unsetting no normal flux mesh vel for BI: " << *p << std::endl;
             x_no_flux_boundary_indicators.erase(*p);
           }
+      for (auto bi : x_no_flux_boundary_indicators)
+         std::cout << "No normal flux BI: " << bi << std::endl;
 
       // Make the no flux boundary constraints
       VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
@@ -302,7 +326,8 @@ namespace aspect
       // Jacobi seems to be fine here.  Other preconditioners (ILU, IC) run into trouble
       // because the matrix is mostly empty, since we don't touch internal vertices.
       LinearAlgebra::PreconditionJacobi preconditioner_mass;
-      preconditioner_mass.initialize(mass_matrix);
+      LinearAlgebra::PreconditionJacobi::AdditionalData preconditioner_control(1,1e-16,1);
+      preconditioner_mass.initialize(mass_matrix, preconditioner_control);
 
       this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
       SolverControl solver_control(50.*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
@@ -320,6 +345,22 @@ namespace aspect
       d_displacement = solution;
       d_displacement -= displacements;
       d_displacement -= initial_topography;
+
+      // Output the solution
+      DataOut<dim> data_out;
+      data_out.attach_dof_handler(mesh_deformation_dof_handler);
+      data_out.add_data_vector(solution, "New_topography");
+      data_out.add_data_vector(displacements, "Old_displacements");
+      data_out.add_data_vector(initial_topography, "Initial_topography");
+      LinearAlgebra::Vector old_topography(mesh_locally_owned, this->get_mpi_communicator());
+      old_topography = initial_topography;
+      old_topography += displacements;
+      data_out.add_data_vector(old_topography, "Old_topography");
+      data_out.build_patches();
+      const unsigned int timestep_number = this->get_timestep_number();
+      std::ofstream output_solution("solution-" + dealii::Utilities::int_to_string(timestep_number) + ".vtk");
+      data_out.write_vtk(output_solution);
+
       // The velocity
       if (this->get_timestep() > 0.)
         d_displacement /= this->get_timestep();
@@ -407,8 +448,43 @@ namespace aspect
     template <int dim>
     void Diffusion<dim>::parse_parameters(ParameterHandler &prm)
     {
+      // The list of tangential Stokes velocity boundary indicators.
+      tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
+      for (auto bi : tangential_boundary_velocity_indicators)
+         std::cout << "Tangential vel BI: " << bi << std::endl;
+      // The list of zero Stokes velocity boundary indicators.
+      zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
+      for (auto bi : zero_boundary_velocity_indicators)
+         std::cout << "Zero vel BI: " << bi << std::endl;
+      // The list of prescribed Stokes velocity boundary indicators.
+      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators = 
+           this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
+      for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
+           p != active_boundary_velocity_indicators.end(); ++p)
+           prescribed_boundary_velocity_indicators.insert(p->first);
+      for (auto bi : prescribed_boundary_velocity_indicators)
+         std::cout << "Prescribed vel BI: " << bi << std::endl;
+
       prm.enter_subsection ("Mesh deformation");
       {
+        // Create the list of tangential mesh movement boundary indicators.
+        try
+          {
+            const std::vector<types::boundary_id> x_additional_tangential_mesh_boundary_indicators
+              = this->get_geometry_model().translate_symbolic_boundary_names_to_ids(Utilities::split_string_list
+                                                                             (prm.get ("Additional tangential mesh velocity boundary indicators")));
+
+            additional_tangential_mesh_boundary_indicators.insert(x_additional_tangential_mesh_boundary_indicators.begin(),
+                                                       x_additional_tangential_mesh_boundary_indicators.end());
+          }
+        catch (const std::string &error)
+          {
+            AssertThrow (false, ExcMessage ("While parsing the entry <Mesh deformation/Additional tangential "
+                                            "mesh velocity boundary indicators>, there was an error. Specifically, "
+                                            "the conversion function complained as follows: "
+                                            + error));
+          }
+
         prm.enter_subsection ("Diffusion");
         {
           diffusivity = prm.get_double("Hillslope transport coefficient");
