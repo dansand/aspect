@@ -102,6 +102,11 @@ namespace aspect
                                const std::set<types::boundary_id> boundary_id) const;
 
         /**
+         * Set the time when diffusion was last applied.
+         */
+        void set_last_diffusion_time (const double current_time);
+
+        /**
          * The hillslope transport coefficient or diffusivity [m2/yr]
          * used in the hillslope diffusion of the deformed
          * surface. TODO Reasonable values lie between X and X.
@@ -116,17 +121,54 @@ namespace aspect
         double diffusion_time_step;
 
         /**
-         * TODO
+         * The start time of the model run
+         * used to determine whether diffusion should
+         * be applied.
+         */
+        double start_time;
+
+        /**
+         * The current time used to determine whether diffusion should
+         * be applied.
+         */
+        double current_time;
+
+        /**
+         * The last time at which diffusion was supposed
+         * to be applied. Used to check for the next necessary
+         * application of diffusion.
+         */
+        double last_diffusion_time;
+
+        /**
          * The amount of model time between applying diffusion
-         * of the free surface.
+         * to the boundary with the given mesh deformation boundary indicator.
          */
         double time_between_diffusion;
 
         /**
-         * TODO
-         * Not used.
+         * The start timestep of the model run
+         * used to determine whether diffusion should
+         * be applied.
          */
-        double current_time;
+        unsigned int start_timestep;
+
+        /**
+         * Last timestep at which diffusion was applied.
+         * Used to check for the next necessary diffusion application.
+         */
+        unsigned int last_diffusion_timestep;
+
+        /**
+         * Maximum number of steps between the application of diffusion.
+         */
+        unsigned int timesteps_between_diffusion;
+
+        /**
+         * Whether or not in the current timestep, diffusion
+         * should be applied.
+         */
+        bool apply_diffusion;
 
         /**
          * Boundaries along which the Stokes velocity is set to tangential.
