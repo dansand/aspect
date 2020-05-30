@@ -37,6 +37,7 @@
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/trilinos_precondition.h>
+#include <boost/lexical_cast.hpp>
 
 namespace aspect
 {
@@ -48,8 +49,14 @@ namespace aspect
       :
       diffusivity(0),
       diffusion_time_step(0),
+      start_time(0),
+      current_time(0),
+      last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
       time_between_diffusion(0),
-      current_time(0)
+      start_timestep(numbers::invalid_unsigned_int),
+      last_diffusion_timestep (numbers::invalid_unsigned_int),
+      timesteps_between_diffusion (std::numeric_limits<int>::max()),
+      apply_diffusion(false)
     {}
 
 
@@ -61,6 +68,18 @@ namespace aspect
       AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
                   Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
                   ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries. "));
+
+      // Initialze the start time and timestep
+      if (std::isnan(start_time))
+        {
+          if (this->convert_output_to_years())
+            start_time = (this->get_time() / year_in_seconds);
+          else
+            start_time = (this->get_time());
+        }
+
+      if (std::isnan(start_timestep))
+        start_timestep = this->get_timestep_number();
     }
 
 
@@ -75,6 +94,29 @@ namespace aspect
         current_time = (this->get_time() / year_in_seconds);
       else
         current_time = (this->get_time());
+
+      // Determine whether we need to apply diffusion based
+      // on the time or timestep interval between applications.
+      if (this->get_timestep_number() != 0)
+        {
+          if ((std::isnan(last_diffusion_time) && current_time >= start_time + time_between_diffusion)
+              || (std::isnan(last_diffusion_time) && this->get_timestep_number() >= start_timestep + timesteps_between_diffusion))
+            apply_diffusion = true;
+          else if ((current_time >= last_diffusion_time + time_between_diffusion)
+                   || (this->get_timestep_number() >= last_diffusion_timestep + timesteps_between_diffusion))
+            apply_diffusion = true;
+          else
+            apply_diffusion = false;
+        }
+
+      // If diffusion is applied, set the current time(step) as
+      // the last time(step) of application.
+      if (apply_diffusion)
+        {
+          last_diffusion_time = current_time;
+          last_diffusion_timestep = this->get_timestep_number();
+        }
+
     }
 
 
@@ -384,6 +426,9 @@ namespace aspect
                                                              ConstraintMatrix &mesh_velocity_constraints,
                                                              const std::set<types::boundary_id> &boundary_id) const
     {
+      if (!apply_diffusion)
+        return;
+
       LinearAlgebra::Vector boundary_velocity;
 
       const IndexSet mesh_locally_owned = mesh_deformation_dof_handler.locally_owned_dofs();
@@ -414,6 +459,27 @@ namespace aspect
               }
         }
 
+
+    }
+
+
+    template <int dim>
+    void
+    Diffusion<dim>::set_last_diffusion_time (const double current_time)
+    {
+      // if time_between_diffusion is positive, then update the last supposed diffusion
+      // time
+      if (time_between_diffusion > 0)
+        {
+          // We need to find the last time diffusion was supposed to be written.
+          // this is the last_diffusion_time plus the largest positive multiple
+          // of time_between_diffusions that passed since then. We need to handle the
+          // edge case where last_diffusion_time+time_between_diffusion==current_time,
+          // we did an diffusion and std::floor sadly rounds to zero. This is done
+          // by forcing std::floor to round 1.0-eps to 1.0.
+          const double magic = 1.0+2.0*std::numeric_limits<double>::epsilon();
+          last_diffusion_time = last_diffusion_time + std::floor((current_time-last_diffusion_time)/time_between_diffusion*magic) * time_between_diffusion/magic;
+        }
     }
 
 
@@ -430,15 +496,24 @@ namespace aspect
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
                             "and depositional processes. ");
-          //TODO why two timestep parameters?
           prm.declare_entry("Diffusion timestep", "2000",
                             Patterns::Double(0),
                             "The timestep used in the solving of the diffusion "
-                            "equation. ");
-          prm.declare_entry("Time between diffusion", "2000",
-                            Patterns::Double(0),
-                            "The timestep used in the solving of the diffusion "
-                            "equation. ");
+                            "equation. This timestep will be limited to the "
+                            "numerical timestep. "
+                            "Units: years if the "
+                            "'Use years in output instead of seconds' parameter is set; "
+                            "seconds otherwise.");
+          prm.declare_entry("Time between diffusion", boost::lexical_cast<std::string>(std::numeric_limits<double>::max()),
+                            Patterns::Double(0,std::numeric_limits<double>::max()),
+                            "The time between each application of diffusion. "
+                            "Units: years if the "
+                            "'Use years in output instead of seconds' parameter is set; "
+                            "seconds otherwise.");
+          prm.declare_entry("Time steps between diffusion", "1",
+                            Patterns::Integer(0,std::numeric_limits<int>::max()),
+                            "The maximum number of time steps between each application of "
+                            "diffusion.");
         }
         prm.leave_subsection ();
       }
@@ -490,6 +565,12 @@ namespace aspect
           diffusivity = prm.get_double("Hillslope transport coefficient");
           diffusion_time_step = prm.get_double("Diffusion timestep");
           time_between_diffusion = prm.get_double("Time between diffusion");
+          timesteps_between_diffusion = prm.get_integer("Time steps between diffusion");
+          if (this->convert_output_to_years())
+            {
+              diffusion_time_step *= year_in_seconds;
+              time_between_diffusion *= year_in_seconds;
+            }
         }
         prm.leave_subsection ();
       }
