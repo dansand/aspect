@@ -69,13 +69,10 @@ namespace aspect
                   Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
                   ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries. "));
 
-      // Initialze the start time and timestep
+      // Initialize the start time and timestep
       if (std::isnan(start_time))
         {
-          if (this->convert_output_to_years())
-            start_time = (this->get_time() / year_in_seconds);
-          else
-            start_time = (this->get_time());
+          start_time = (this->get_time());
         }
 
       if (std::isnan(start_timestep))
@@ -88,22 +85,18 @@ namespace aspect
     void
     Diffusion<dim>::update ()
     {
-      // we get time passed as seconds (always) but may want
-      // to reinterpret it in years
-      if (this->convert_output_to_years())
-        current_time = (this->get_time() / year_in_seconds);
-      else
-        current_time = (this->get_time());
+      current_time = (this->get_time());
+      const unsigned int current_timestep_number = this->get_timestep_number();
 
       // Determine whether we need to apply diffusion based
       // on the time or timestep interval between applications.
-      if (this->get_timestep_number() != 0)
+      if (current_timestep_number != 0)
         {
           if ((std::isnan(last_diffusion_time) && current_time >= start_time + time_between_diffusion)
-              || (std::isnan(last_diffusion_time) && this->get_timestep_number() >= start_timestep + timesteps_between_diffusion))
+              || (std::isnan(last_diffusion_time) && current_timestep_number >= start_timestep + timesteps_between_diffusion))
             apply_diffusion = true;
           else if ((current_time >= last_diffusion_time + time_between_diffusion)
-                   || (this->get_timestep_number() >= last_diffusion_timestep + timesteps_between_diffusion))
+                   || (current_timestep_number >= last_diffusion_timestep + timesteps_between_diffusion))
             apply_diffusion = true;
           else
             apply_diffusion = false;
@@ -114,7 +107,7 @@ namespace aspect
       if (apply_diffusion)
         {
           last_diffusion_time = current_time;
-          last_diffusion_timestep = this->get_timestep_number();
+          last_diffusion_timestep = current_timestep_number;
         }
 
     }
@@ -139,8 +132,6 @@ namespace aspect
       for (periodic_boundary_pairs::iterator p = pbp.begin(); p != pbp.end(); ++p)
         DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler,
                                                (*p).first.first, (*p).first.second, (*p).second, mass_matrix_constraints);
-      // TODO What constraints do we want?
-      // For now just assume Neumann BC
 
       // The list of boundary indicators fow which we need to set
       // zero mesh velocities, which means the zero/prescribed Stokes velocity
@@ -460,26 +451,6 @@ namespace aspect
         }
 
 
-    }
-
-
-    template <int dim>
-    void
-    Diffusion<dim>::set_last_diffusion_time (const double current_time)
-    {
-      // if time_between_diffusion is positive, then update the last supposed diffusion
-      // time
-      if (time_between_diffusion > 0)
-        {
-          // We need to find the last time diffusion was supposed to be written.
-          // this is the last_diffusion_time plus the largest positive multiple
-          // of time_between_diffusions that passed since then. We need to handle the
-          // edge case where last_diffusion_time+time_between_diffusion==current_time,
-          // we did an diffusion and std::floor sadly rounds to zero. This is done
-          // by forcing std::floor to round 1.0-eps to 1.0.
-          const double magic = 1.0+2.0*std::numeric_limits<double>::epsilon();
-          last_diffusion_time = last_diffusion_time + std::floor((current_time-last_diffusion_time)/time_between_diffusion*magic) * time_between_diffusion/magic;
-        }
     }
 
 

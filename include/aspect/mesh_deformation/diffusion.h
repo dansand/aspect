@@ -102,11 +102,6 @@ namespace aspect
                                const std::set<types::boundary_id> boundary_id) const;
 
         /**
-         * Set the time when diffusion was last applied.
-         */
-        void set_last_diffusion_time (const double current_time);
-
-        /**
          * The hillslope transport coefficient or diffusivity [m2/yr]
          * used in the hillslope diffusion of the deformed
          * surface. TODO Reasonable values lie between X and X.
