@@ -34,7 +34,6 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/data_out.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <boost/lexical_cast.hpp>
@@ -144,7 +143,6 @@ namespace aspect
         if (boundary_ids.find(*p) == boundary_ids.end())
           if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
             {
-              std::cout << "Setting zero mesh vel for BI: " << *p << std::endl;
               VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
                                                         ZeroFunction<dim>(dim), mass_matrix_constraints);
             }
@@ -159,11 +157,8 @@ namespace aspect
            p != x_no_flux_boundary_indicators.end(); ++p)
         if (boundary_ids.find(*p) != boundary_ids.end())
           {
-            std::cout << "Unsetting no normal flux mesh vel for BI: " << *p << std::endl;
             x_no_flux_boundary_indicators.erase(*p);
           }
-      for (auto bi : x_no_flux_boundary_indicators)
-        std::cout << "No normal flux BI: " << bi << std::endl;
 
       // Make the no flux boundary constraints
       VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
@@ -379,21 +374,6 @@ namespace aspect
       d_displacement -= displacements;
       d_displacement -= initial_topography;
 
-      // Output the solution
-      DataOut<dim> data_out;
-      data_out.attach_dof_handler(mesh_deformation_dof_handler);
-      data_out.add_data_vector(solution, "New_topography");
-      data_out.add_data_vector(displacements, "Old_displacements");
-      data_out.add_data_vector(initial_topography, "Initial_topography");
-      LinearAlgebra::Vector old_topography(mesh_locally_owned, this->get_mpi_communicator());
-      old_topography = initial_topography;
-      old_topography += displacements;
-      data_out.add_data_vector(old_topography, "Old_topography");
-      data_out.build_patches();
-      const unsigned int timestep_number = this->get_timestep_number();
-      std::ofstream output_solution("solution-" + dealii::Utilities::int_to_string(timestep_number) + ".vtk");
-      data_out.write_vtk(output_solution);
-
       // The velocity
       if (this->get_timestep() > 0.)
         d_displacement /= this->get_timestep();
@@ -496,20 +476,14 @@ namespace aspect
     {
       // The list of tangential Stokes velocity boundary indicators.
       tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
-      for (auto bi : tangential_boundary_velocity_indicators)
-        std::cout << "Tangential vel BI: " << bi << std::endl;
       // The list of zero Stokes velocity boundary indicators.
       zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
-      for (auto bi : zero_boundary_velocity_indicators)
-        std::cout << "Zero vel BI: " << bi << std::endl;
       // The list of prescribed Stokes velocity boundary indicators.
       const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
         this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
       for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
            p != active_boundary_velocity_indicators.end(); ++p)
         prescribed_boundary_velocity_indicators.insert(p->first);
-      for (auto bi : prescribed_boundary_velocity_indicators)
-        std::cout << "Prescribed vel BI: " << bi << std::endl;
 
       prm.enter_subsection ("Mesh deformation");
       {

@@ -227,8 +227,6 @@ namespace aspect
       const unsigned int n_face_q_points = fe_face_values.n_quadrature_points,
                          dofs_per_cell = fs_fe_face_values.dofs_per_cell;
 
-      this->get_pcout() << "FE: n_face_q_points: " << n_face_q_points << ", FSFE: dofs_per_cell: " << dofs_per_cell << ", FSFE: n_face_q_points: " << fs_fe_face_values.n_quadrature_points << std::endl;
-
       // stuff for assembling system
       std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
       Vector<double> cell_vector (dofs_per_cell);
