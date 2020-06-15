@@ -120,7 +120,8 @@ namespace aspect
                                           LinearAlgebra::Vector &output,
                                           const std::set<types::boundary_id> boundary_ids) const
     {
-
+      // Check that the current timestep does not exceed the diffusion timestep
+      compute_time_step(mesh_deformation_dof_handler, boundary_ids);
 
       // Set up constraints
       ConstraintMatrix mass_matrix_constraints(mesh_locally_relevant);
@@ -168,7 +169,6 @@ namespace aspect
                                                        mass_matrix_constraints, this->get_mapping());
 
       mass_matrix_constraints.close();
-
 
       // Set up the system to solve
       LinearAlgebra::SparseMatrix mass_matrix;
@@ -358,7 +358,7 @@ namespace aspect
       preconditioner_mass.initialize(mass_matrix, preconditioner_control);
 
       this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
-      SolverControl solver_control(50.*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
+      SolverControl solver_control(50*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
 
@@ -383,6 +383,52 @@ namespace aspect
       output = d_displacement;
     }
 
+    template <int dim>
+    void Diffusion<dim>::compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
+                                            const std::set<types::boundary_id> boundary_ids) const
+    {
+      // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
+      const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
+
+      FEFaceValues<dim> fs_fe_face_values (this->get_mapping(), mesh_deformation_dof_handler.get_fe(), face_quadrature, update_quadrature_points);
+
+      double min_local_conduction_timestep = std::numeric_limits<double>::max();
+
+      for (const auto &fscell : mesh_deformation_dof_handler.active_cell_iterators())
+          if (fscell->at_boundary() && fscell->is_locally_owned())
+              for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
+                  if (fscell->face(face_no)->at_boundary())
+                  {
+                      // Boundary indicator of current cell face
+                      const types::boundary_id boundary_indicator
+                              = fscell->face(face_no)->boundary_id();
+                      fs_fe_face_values.reinit (fscell, face_no);
+
+                      // Only apply diffusion to the requested boundaries
+                      if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
+                          continue;
+
+                      // Evaluate thermal diffusivity at each quadrature point and
+                      // calculate the corresponding conduction timestep, if applicable
+                      if (diffusivity > 0.)
+                      {
+                          min_local_conduction_timestep = std::min(min_local_conduction_timestep,
+                                                                   this->get_parameters().CFL_number*pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
+                                                                   / diffusivity);
+
+                      }
+                  }
+
+      const double min_conduction_timestep = - Utilities::MPI::max (-min_local_conduction_timestep, this->get_mpi_communicator());
+
+      AssertThrow (min_conduction_timestep > 0,
+                   ExcMessage("The time step length for diffusion of the surface needs to be positive, "
+                              "but the computed step length was: " + std::to_string(min_conduction_timestep) + ". "
+                              "Please check for non-positive diffusivity."));
+
+      AssertThrow (this->get_timestep() <= min_conduction_timestep,
+                   ExcMessage("The timestep is too large for diffusion of the surface."));
+    }
 
 
     /**
@@ -409,6 +455,8 @@ namespace aspect
       boundary_velocity.reinit(mesh_locally_owned, mesh_locally_relevant,
                                this->get_mpi_communicator());
 
+      // Determine the mesh velocity at the surface based on diffusion of
+      // the topography
       diffuse_boundary(mesh_deformation_dof_handler, mesh_locally_owned,
                        mesh_locally_relevant, boundary_velocity, boundary_id);
 
@@ -447,14 +495,6 @@ namespace aspect
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
                             "and depositional processes. ");
-          prm.declare_entry("Diffusion timestep", "2000",
-                            Patterns::Double(0),
-                            "The timestep used in the solving of the diffusion "
-                            "equation. This timestep will be limited to the "
-                            "numerical timestep. "
-                            "Units: years if the "
-                            "'Use years in output instead of seconds' parameter is set; "
-                            "seconds otherwise.");
           prm.declare_entry("Time between diffusion", boost::lexical_cast<std::string>(std::numeric_limits<double>::max()),
                             Patterns::Double(0,std::numeric_limits<double>::max()),
                             "The time between each application of diffusion. "
@@ -508,7 +548,6 @@ namespace aspect
         prm.enter_subsection ("Diffusion");
         {
           diffusivity = prm.get_double("Hillslope transport coefficient");
-          diffusion_time_step = prm.get_double("Diffusion timestep");
           time_between_diffusion = prm.get_double("Time between diffusion");
           timesteps_between_diffusion = prm.get_integer("Time steps between diffusion");
           if (this->convert_output_to_years())
