@@ -416,14 +416,19 @@ namespace aspect
       // Get the global minimum timestep
       const double min_conduction_timestep = - Utilities::MPI::max (-min_local_conduction_timestep, this->get_mpi_communicator());
 
-      AssertThrow (min_conduction_timestep > 0,
+      AssertThrow (min_conduction_timestep > 0.,
                    ExcMessage("The time step length for diffusion of the surface needs to be positive, "
                               "but the computed step length was: " + std::to_string(min_conduction_timestep) + ". "
                               "Please check for non-positive diffusivity."));
 
+      double conduction_timestep = min_conduction_timestep;
+      if (this->convert_output_to_years())
+          conduction_timestep /= year_in_seconds;
+
       AssertThrow (this->get_timestep() <= min_conduction_timestep,
                    ExcMessage("The numerical timestep is too large for diffusion of the surface. Although the "
-                              "diffusion scheme is stable, note that the error increases linearly with the timestep."));
+                              "diffusion scheme is stable, note that the error increases linearly with the timestep. "
+                              "The diffusion timestep is: " + std::to_string(conduction_timestep) + ". "));
     }
 
 
@@ -488,7 +493,7 @@ namespace aspect
                             "The hillslope transport coefficient used to "
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
-                            "and depositional processes. ");
+                            "and depositional processes. Units: m2/s. ");
           prm.declare_entry("Time between diffusion", boost::lexical_cast<std::string>(std::numeric_limits<double>::max()),
                             Patterns::Double(0,std::numeric_limits<double>::max()),
                             "The time between each application of diffusion. "
