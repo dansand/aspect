@@ -20,16 +20,12 @@
 
 
 #include <aspect/mesh_deformation/diffusion.h>
-#include <aspect/simulator_signals.h>
 #include <aspect/gravity_model/interface.h>
 #include <aspect/geometry_model/interface.h>
 #include <aspect/geometry_model/box.h>
 #include <aspect/geometry_model/two_merged_boxes.h>
-#include <aspect/simulator/assemblers/interface.h>
-#include <aspect/melt.h>
 #include <aspect/simulator.h>
 #include <aspect/geometry_model/initial_topography_model/zero_topography.h>
-#include <aspect/geometry_model/box.h>
 
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/base/symmetric_tensor.h>
@@ -47,7 +43,6 @@ namespace aspect
     Diffusion<dim>::Diffusion()
       :
       diffusivity(0),
-      diffusion_time_step(0),
       start_time(0),
       current_time(0),
       last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
@@ -235,9 +230,6 @@ namespace aspect
       // The global initial topography on the MeshDeformation FE
       // TODO find another way to get to the initial topography?
       LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_initial_topography();
-      // In case we don't store the initial topography, set it to zero.
-//      LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_mesh_displacements();
-//      initial_topography = 0;
 
       // Do nothing at time zero
       if (this->get_timestep_number() < 1)
@@ -365,7 +357,7 @@ namespace aspect
       // Distribute constraints on mass matrix
       mass_matrix_constraints.distribute (solution);
 
-      // The solution contains the new displacements, we need to return a velocity.
+      // The solution contains the new displacements, but we need to return a velocity.
       // Therefore, we compute v=d_displacement/d_t.
       // d_displacement are the new mesh node locations
       // minus the old locations.
@@ -390,7 +382,8 @@ namespace aspect
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
 
-      FEFaceValues<dim> fs_fe_face_values (this->get_mapping(), mesh_deformation_dof_handler.get_fe(), face_quadrature, update_quadrature_points);
+      // TODO Do we need to update anything for the vertex distance?
+      FEFaceValues<dim> fs_fe_face_values (this->get_mapping(), mesh_deformation_dof_handler.get_fe(), face_quadrature, update_default);
 
       double min_local_conduction_timestep = std::numeric_limits<double>::max();
 
@@ -399,17 +392,18 @@ namespace aspect
               for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
                   if (fscell->face(face_no)->at_boundary())
                   {
-                      // Boundary indicator of current cell face
+                      // Get the boundary indicator of current cell face
                       const types::boundary_id boundary_indicator
                               = fscell->face(face_no)->boundary_id();
-                      fs_fe_face_values.reinit (fscell, face_no);
 
-                      // Only apply diffusion to the requested boundaries
+                      // Only consider the requested boundaries
                       if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
                           continue;
 
-                      // Evaluate thermal diffusivity at each quadrature point and
-                      // calculate the corresponding conduction timestep, if applicable
+                      // Reninitalize update flags for current cell face
+                      fs_fe_face_values.reinit (fscell, face_no);
+
+                      // Calculate the corresponding conduction timestep, if applicable
                       if (diffusivity > 0.)
                       {
                           min_local_conduction_timestep = std::min(min_local_conduction_timestep,
@@ -419,6 +413,7 @@ namespace aspect
                       }
                   }
 
+      // Get the global minimum timestep
       const double min_conduction_timestep = - Utilities::MPI::max (-min_local_conduction_timestep, this->get_mpi_communicator());
 
       AssertThrow (min_conduction_timestep > 0,
@@ -427,7 +422,8 @@ namespace aspect
                               "Please check for non-positive diffusivity."));
 
       AssertThrow (this->get_timestep() <= min_conduction_timestep,
-                   ExcMessage("The timestep is too large for diffusion of the surface."));
+                   ExcMessage("The numerical timestep is too large for diffusion of the surface. Although the "
+                              "diffusion scheme is stable, note that the error increases linearly with the timestep."));
     }
 
 
@@ -477,17 +473,15 @@ namespace aspect
                 mesh_velocity_constraints.set_inhomogeneity(index, boundary_velocity[index]);
               }
         }
-
-
     }
 
 
     template <int dim>
     void Diffusion<dim>::declare_parameters(ParameterHandler &prm)
     {
-      prm.enter_subsection ("Mesh deformation");
+      prm.enter_subsection("Mesh deformation");
       {
-        prm.enter_subsection ("Diffusion");
+        prm.enter_subsection("Diffusion");
         {
           prm.declare_entry("Hillslope transport coefficient", "0.5",
                             Patterns::Double(0),
@@ -506,10 +500,11 @@ namespace aspect
                             "The maximum number of time steps between each application of "
                             "diffusion.");
         }
-        prm.leave_subsection ();
+        prm.leave_subsection();
       }
-      prm.leave_subsection ();
+      prm.leave_subsection();
     }
+
 
     template <int dim>
     void Diffusion<dim>::parse_parameters(ParameterHandler &prm)
@@ -547,14 +542,11 @@ namespace aspect
 
         prm.enter_subsection ("Diffusion");
         {
-          diffusivity = prm.get_double("Hillslope transport coefficient");
-          time_between_diffusion = prm.get_double("Time between diffusion");
+          diffusivity                 = prm.get_double("Hillslope transport coefficient");
+          time_between_diffusion      = prm.get_double("Time between diffusion");
           timesteps_between_diffusion = prm.get_integer("Time steps between diffusion");
           if (this->convert_output_to_years())
-            {
-              diffusion_time_step *= year_in_seconds;
               time_between_diffusion *= year_in_seconds;
-            }
         }
         prm.leave_subsection ();
       }
@@ -573,6 +565,9 @@ namespace aspect
                                            "diffusion",
                                            "A plugin that computes the deformation of surface "
                                            "vertices according to the solution of the hillslope diffusion problem. "
-                                           "TODO add more documentation.")
+                                           "Diffusion can be applied every timestep, mimicking surface processing, "
+                                           "or at a user-defined time or timestep interval to purely smooth the surface "
+                                           "topography to avoid too great distortion of mesh elements when a free "
+                                           "surface is used.")
   }
 }
