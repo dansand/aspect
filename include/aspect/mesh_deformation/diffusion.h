@@ -101,7 +101,7 @@ namespace aspect
                                 const std::set<types::boundary_id> boundary_ids) const;
 
         /**
-         * The hillslope transport coefficient or diffusivity [m2/yr]
+         * The hillslope transport coefficient or diffusivity [m2/s]
          * used in the hillslope diffusion of the deformed
          * surface.
          */
