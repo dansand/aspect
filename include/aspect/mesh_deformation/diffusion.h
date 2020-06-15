@@ -102,18 +102,20 @@ namespace aspect
                                const std::set<types::boundary_id> boundary_id) const;
 
         /**
-         * The hillslope transport coefficient or diffusivity [m2/yr]
-         * used in the hillslope diffusion of the deformed
-         * surface. TODO Reasonable values lie between X and X.
+         * Check that the size of the next time step is not larger than the conduction
+         * timestep based on the mesh size and the diffusivity on each cell along the
+         * surface. The computed time step has to satisfy the CFL
+         * number chosen in the input parameter file on each cell of the mesh.
          */
-        double diffusivity;
+        void compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
+                                const std::set<types::boundary_id> boundary_ids) const;
 
         /**
-         * TODO
-         * The diffusion timestep used in case the advection timestep
-         * is larger than this timestep.
+         * The hillslope transport coefficient or diffusivity [m2/yr]
+         * used in the hillslope diffusion of the deformed
+         * surface.
          */
-        double diffusion_time_step;
+        double diffusivity;
 
         /**
          * The start time of the model run
