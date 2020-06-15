@@ -23,10 +23,7 @@
 #define _aspect_mesh_deformation_diffusion_h
 
 #include <aspect/mesh_deformation/interface.h>
-
 #include <aspect/simulator_access.h>
-#include <aspect/simulator/assemblers/interface.h>
-
 #include <aspect/geometry_model/initial_topography_model/interface.h>
 
 
@@ -39,9 +36,8 @@ namespace aspect
   {
     /**
      * A plugin that computes the deformation of surface
-     * vertices according to the solution of the flow problem.
-     * In particular this means if the surface of the domain is
-     * left open to flow, this flow will carry the mesh with it.
+     * vertices according to the solution of a dim-1 diffusion
+     * problem.
      */
     template<int dim>
     class Diffusion : public Interface<dim>, public SimulatorAccess<dim>
@@ -50,22 +46,16 @@ namespace aspect
         Diffusion();
 
         /**
-         * Initialize function, which connects the set_assemblers function
-         * to the appropriate Simulator signal.
+         * Initialize function, which sets the start time and
+         * start timestep of diffusion.
          */
         void initialize() override;
 
         /**
-         * The update function sets the current time.
+         * The update function sets the current time and determines
+         * whether diffusion should be applied in this timestep.
          */
         void update() override;
-
-        /**
-         * Called by Simulator::set_assemblers() to allow the Diffusion plugin
-         * to register its assembler.
-         */
-        void set_assemblers(const SimulatorAccess<dim> &simulator_access,
-                            aspect::Assemblers::Manager<dim> &assemblers) const;
 
         /**
          * A function that creates constraints for the velocity of certain mesh
@@ -79,13 +69,13 @@ namespace aspect
                                                  const std::set<types::boundary_id> &boundary_id) const override;
 
         /**
-         * Declare parameters for the free surface handling.
+         * Declare parameters for the diffusion of the surface.
          */
         static
         void declare_parameters (ParameterHandler &prm);
 
         /**
-         * Parse parameters for the free surface handling.
+         * Parse parameters for the diffusion of the surface.
          */
         void parse_parameters (ParameterHandler &prm) override;
 
