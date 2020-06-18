@@ -43,13 +43,13 @@ namespace aspect
     Diffusion<dim>::Diffusion()
       :
       diffusivity(0),
-      start_time(0),
+      start_time(std::numeric_limits<double>::quiet_NaN()),
       current_time(0),
       last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
-      time_between_diffusion(0),
-      start_timestep(numbers::invalid_unsigned_int),
-      last_diffusion_timestep (numbers::invalid_unsigned_int),
-      timesteps_between_diffusion (std::numeric_limits<int>::max()),
+      time_between_diffusion(std::numeric_limits<double>::max()),
+      start_timestep(0),
+      last_diffusion_timestep (1),
+      timesteps_between_diffusion (1),
       apply_diffusion(false)
     {}
 
@@ -63,14 +63,6 @@ namespace aspect
                   Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
                   ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries. "));
 
-      // Initialize the start time and timestep
-      if (std::isnan(start_time))
-        {
-          start_time = (this->get_time());
-        }
-
-      if (std::isnan(start_timestep))
-        start_timestep = this->get_timestep_number();
     }
 
 
@@ -79,6 +71,14 @@ namespace aspect
     void
     Diffusion<dim>::update ()
     {
+        // Initialize the start time and timestep
+        if (std::isnan(start_time))
+        {
+            start_time = (this->get_time());
+            start_timestep = this->get_timestep_number();
+        }
+
+        // Set the current time and timestep
       current_time = (this->get_time());
       const unsigned int current_timestep_number = this->get_timestep_number();
 
@@ -167,9 +167,7 @@ namespace aspect
 
       // Set up the system to solve
       LinearAlgebra::SparseMatrix mass_matrix;
-      LinearAlgebra::Vector system_rhs, solution;
-      system_rhs.reinit(mesh_locally_owned, this->get_mpi_communicator());
-      solution.reinit(mesh_locally_owned, this->get_mpi_communicator());
+
       // Sparsity of the matrix
 #ifdef ASPECT_USE_PETSC
       LinearAlgebra::DynamicSparsityPattern sp(mesh_locally_relevant);
@@ -194,6 +192,10 @@ namespace aspect
       sp.compress();
       mass_matrix.reinit (sp);
 #endif
+
+      LinearAlgebra::Vector system_rhs, solution;
+      system_rhs.reinit(mesh_locally_owned, this->get_mpi_communicator());
+      solution.reinit(mesh_locally_owned, this->get_mpi_communicator());
 
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
@@ -360,11 +362,11 @@ namespace aspect
       // The solution contains the new displacements, but we need to return a velocity.
       // Therefore, we compute v=d_displacement/d_t.
       // d_displacement are the new mesh node locations
-      // minus the old locations.
-      LinearAlgebra::Vector d_displacement(mesh_locally_owned, this->get_mpi_communicator());
+      // minus the old locations, which are initial_topography + displacements.
+      LinearAlgebra::Vector d_displacement(mesh_locally_owned, mesh_locally_relevant, this->get_mpi_communicator());
       d_displacement = solution;
-      d_displacement -= displacements;
       d_displacement -= initial_topography;
+      d_displacement -= displacements;
 
       // The velocity
       if (this->get_timestep() > 0.)
@@ -374,6 +376,7 @@ namespace aspect
 
       output = d_displacement;
     }
+
 
     template <int dim>
     void Diffusion<dim>::compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
@@ -449,7 +452,7 @@ namespace aspect
 
       LinearAlgebra::Vector boundary_velocity;
 
-      const IndexSet mesh_locally_owned = mesh_deformation_dof_handler.locally_owned_dofs();
+      const IndexSet &mesh_locally_owned = mesh_deformation_dof_handler.locally_owned_dofs();
       IndexSet mesh_locally_relevant;
       DoFTools::extract_locally_relevant_dofs (mesh_deformation_dof_handler,
                                                mesh_locally_relevant);
