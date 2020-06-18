@@ -71,14 +71,14 @@ namespace aspect
     void
     Diffusion<dim>::update ()
     {
-        // Initialize the start time and timestep
-        if (std::isnan(start_time))
+      // Initialize the start time and timestep
+      if (std::isnan(start_time))
         {
-            start_time = (this->get_time());
-            start_timestep = this->get_timestep_number();
+          start_time = (this->get_time());
+          start_timestep = this->get_timestep_number();
         }
 
-        // Set the current time and timestep
+      // Set the current time and timestep
       current_time = (this->get_time());
       const unsigned int current_timestep_number = this->get_timestep_number();
 
@@ -391,30 +391,30 @@ namespace aspect
       double min_local_conduction_timestep = std::numeric_limits<double>::max();
 
       for (const auto &fscell : mesh_deformation_dof_handler.active_cell_iterators())
-          if (fscell->at_boundary() && fscell->is_locally_owned())
-              for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
-                  if (fscell->face(face_no)->at_boundary())
+        if (fscell->at_boundary() && fscell->is_locally_owned())
+          for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
+            if (fscell->face(face_no)->at_boundary())
+              {
+                // Get the boundary indicator of current cell face
+                const types::boundary_id boundary_indicator
+                  = fscell->face(face_no)->boundary_id();
+
+                // Only consider the requested boundaries
+                if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
+                  continue;
+
+                // Reninitalize update flags for current cell face
+                fs_fe_face_values.reinit (fscell, face_no);
+
+                // Calculate the corresponding conduction timestep, if applicable
+                if (diffusivity > 0.)
                   {
-                      // Get the boundary indicator of current cell face
-                      const types::boundary_id boundary_indicator
-                              = fscell->face(face_no)->boundary_id();
+                    min_local_conduction_timestep = std::min(min_local_conduction_timestep,
+                                                             this->get_parameters().CFL_number*pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
+                                                             / diffusivity);
 
-                      // Only consider the requested boundaries
-                      if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
-                          continue;
-
-                      // Reninitalize update flags for current cell face
-                      fs_fe_face_values.reinit (fscell, face_no);
-
-                      // Calculate the corresponding conduction timestep, if applicable
-                      if (diffusivity > 0.)
-                      {
-                          min_local_conduction_timestep = std::min(min_local_conduction_timestep,
-                                                                   this->get_parameters().CFL_number*pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
-                                                                   / diffusivity);
-
-                      }
                   }
+              }
 
       // Get the global minimum timestep
       const double min_conduction_timestep = - Utilities::MPI::max (-min_local_conduction_timestep, this->get_mpi_communicator());
@@ -426,7 +426,7 @@ namespace aspect
 
       double conduction_timestep = min_conduction_timestep;
       if (this->convert_output_to_years())
-          conduction_timestep /= year_in_seconds;
+        conduction_timestep /= year_in_seconds;
 
       AssertThrow (this->get_timestep() <= min_conduction_timestep,
                    ExcMessage("The numerical timestep is too large for diffusion of the surface. Although the "
@@ -554,7 +554,7 @@ namespace aspect
           time_between_diffusion      = prm.get_double("Time between diffusion");
           timesteps_between_diffusion = prm.get_integer("Time steps between diffusion");
           if (this->convert_output_to_years())
-              time_between_diffusion *= year_in_seconds;
+            time_between_diffusion *= year_in_seconds;
         }
         prm.leave_subsection ();
       }
