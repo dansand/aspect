@@ -286,7 +286,7 @@ namespace aspect
 
       // If we are deforming the mesh, also serialize the mesh vertices vector, which
       // uses its own dof handler
-      std::vector<const LinearAlgebra::Vector *> x_fs_system (1);
+      std::vector<const LinearAlgebra::Vector *> x_fs_system (2);
       std::unique_ptr<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector> > mesh_deformation_trans;
       if (parameters.mesh_deformation_enabled)
         {
@@ -295,6 +295,7 @@ namespace aspect
               (mesh_deformation->mesh_deformation_dof_handler);
 
           x_fs_system[0] = &mesh_deformation->mesh_displacements;
+          x_fs_system[1] = &mesh_deformation->initial_topography;
 
 #if DEAL_II_VERSION_GTE(9,1,0)
           mesh_deformation_trans->prepare_for_serialization(x_fs_system);
@@ -496,11 +497,15 @@ namespace aspect
         parallel::distributed::SolutionTransfer<dim, LinearAlgebra::Vector> mesh_deformation_trans( mesh_deformation->mesh_deformation_dof_handler );
         LinearAlgebra::Vector distributed_mesh_displacements( mesh_deformation->mesh_locally_owned,
                                                               mpi_communicator );
-        std::vector<LinearAlgebra::Vector *> fs_system(1);
+        LinearAlgebra::Vector distributed_initial_topography( mesh_deformation->mesh_locally_owned,
+                                                              mpi_communicator );
+        std::vector<LinearAlgebra::Vector *> fs_system(2);
         fs_system[0] = &distributed_mesh_displacements;
+        fs_system[1] = &distributed_initial_topography;
 
         mesh_deformation_trans.deserialize (fs_system);
         mesh_deformation->mesh_displacements = distributed_mesh_displacements;
+        mesh_deformation->initial_topography = distributed_initial_topography;
       }
 
     // read zlib compressed resume.z
