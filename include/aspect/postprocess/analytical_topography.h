@@ -41,7 +41,7 @@ namespace aspect
     {
       public:
         /**
-         * Output topography [m] to file
+         * Output predicted and analytical topography [m] to file.
          */
         virtual
         std::pair<std::string,std::string> execute (TableHandler &statistics);
@@ -85,12 +85,6 @@ namespace aspect
          * to be produced. Used to check for the next necessary output time.
          */
         double last_output_time;
-
-        /**
-         * The time at timestep t1 when the initial topography is added to
-         * the mesh.
-         */
-        double t1;
 
         /**
          * The amplitude of the sinusoidal initial topography.
