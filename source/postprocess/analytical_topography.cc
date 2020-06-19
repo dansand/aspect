@@ -22,7 +22,7 @@
 #include <aspect/postprocess/analytical_topography.h>
 #include <aspect/geometry_model/box.h>
 #include <aspect/geometry_model/sphere.h>
-#include <aspect/geometry_model/spherical_shell.h>
+#include <aspect/geometry_model/box.h>
 #include <aspect/geometry_model/chunk.h>
 #include <aspect/simulator.h>
 #include <aspect/global.h>
@@ -43,13 +43,12 @@ namespace aspect
     std::pair<std::string,std::string>
     AnalyticalTopography<dim>::execute (TableHandler &statistics)
     {
-      //Disallow use of the plugin with sphere geometry model
-      if (GeometryModel::Sphere<dim> *gm = dynamic_cast<GeometryModel::Sphere<dim> *>
-                                           (const_cast<GeometryModel::Interface<dim> *>(&this->get_geometry_model())))
+      // Only allow use of the plugin with the box geometry model
+      if (GeometryModel::Box<dim> *gm = dynamic_cast<GeometryModel::Box<dim> *>
+                                        (const_cast<GeometryModel::Interface<dim> *>(&this->get_geometry_model())))
         {
-          AssertThrow(false, ExcMessage("Topography postprocessor is not yet implemented "
-                                        "for the sphere geometry model. "
-                                        "Consider using a box, spherical shell, or chunk.") );
+          AssertThrow(true, ExcMessage("Topography postprocessor is only implemented "
+                                       "for the box geometry model. ") );
         }
 
       const types::boundary_id relevant_boundary = this->get_geometry_model().translate_symbolic_boundary_name_to_id ("top");
@@ -70,7 +69,6 @@ namespace aspect
       // Set up some variables for the analytical solution of the
       // topography
       const unsigned int n_max = 5000;
-//      const double time = this->get_time()-t1;
       const double time = this->get_time();
 
       // loop over all of the surface cells and save the elevation to stored_value
@@ -93,15 +91,18 @@ namespace aspect
                     const double elevation = this->get_geometry_model().height_above_reference_surface(vertex);
                     if (write_to_file)
                       {
+                        // If there is no analytical solution corresponding to the
+                        // model setup, just output the topography
                         if (analytical_solution_example == 0)
                           output_file << vertex << ' '<< elevation << std::endl;
+                        // If the setup corresponds to anaytical solution 1,
+                        // output the topography and the first solution
                         else if (analytical_solution_example == 1)
                           {
                             double topo = 0;
-                            if ( time < 0. )
-                              topo = 0;
+
                             // initial topography
-                            else if (time < t1/10.)
+                            if (time <= 0.)
                               topo = amplitude * std::sin(numbers::PI*vertex[0]/domain_width);
                             else
                               {
@@ -118,18 +119,22 @@ namespace aspect
                                 topo = 2.*amplitude/numbers::PI + sum;
                               }
                             // write out predicted and analytical topography
-                            output_file << vertex << ' '<< elevation << ' ' << topo << ' ' << time << std::endl;
+                            output_file << vertex << ' '<< elevation << ' ' << topo << std::endl;
                           }
+                        // If the setup corresponds to anaytical solution 2,
+                        // output the topography and the second solution
                         else if (analytical_solution_example == 2)
                           {
                             const double topo = amplitude * std::sin(vertex[0]*numbers::PI/domain_width)
                                                 * std::exp(-kappa*numbers::PI*numbers::PI*time/(domain_width*domain_width));
+                            // write out predicted and analytical topography
                             output_file << vertex << ' '<< elevation << ' ' << topo << std::endl;
                           }
                       }
-                    if ( elevation > local_max_height)
+
+                    if (elevation > local_max_height)
                       local_max_height = elevation;
-                    if ( elevation < local_min_height)
+                    if (elevation < local_min_height)
                       local_min_height = elevation;
                   }
               }
@@ -137,14 +142,48 @@ namespace aspect
       //Calculate min/max topography across all processes
       const double max_topography = Utilities::MPI::max(local_max_height, this->get_mpi_communicator());
       const double min_topography = Utilities::MPI::min(local_min_height, this->get_mpi_communicator());
+      //Calculate min/max analytical topography
+      double max_analytical_topography = 0., min_analytical_topography = 0.;
+      if (analytical_solution_example == 1)
+        {
+          if (time<=0)
+            max_analytical_topography = amplitude * std::sin(0.5*numbers::PI);
+          else
+            {
+              double sum_min = 0., sum_max = 0.;
+              for (unsigned int n=1; n<=n_max; ++n)
+                {
+                  sum_min += std::exp(-kappa*4.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
+                             / ((4.*n*n)-1.) * -4.*amplitude/numbers::PI;
+                  sum_max += std::cos(n*numbers::PI)
+                             * std::exp(-kappa*4.*n*n*numbers::PI*numbers::PI*time/(domain_width*domain_width))
+                             / ((4.*n*n)-1.) * -4.*amplitude/numbers::PI;
+                }
+              // a0=4A/pi --> a0/2=2A/pi
+              min_analytical_topography = 2.*amplitude/numbers::PI + sum_min;
+              max_analytical_topography = 2.*amplitude/numbers::PI + sum_max;
+            }
+        }
+      else if (analytical_solution_example == 2)
+        {
+          max_analytical_topography = amplitude * std::sin(0.5*numbers::PI)
+                                      * std::exp(-kappa*numbers::PI*numbers::PI*time/(domain_width*domain_width));
+          min_analytical_topography = 0.;
+        }
 
       //Write results to statistics file
       statistics.add_value ("Minimum topography (m)",
                             min_topography);
       statistics.add_value ("Maximum topography (m)",
                             max_topography);
+      statistics.add_value ("Minimum analytical topography (m)",
+                            min_analytical_topography);
+      statistics.add_value ("Maximum analytical topography (m)",
+                            max_analytical_topography);
       const char *columns[] = { "Minimum topography (m)",
-                                "Maximum topography (m)"
+                                "Maximum topography (m)",
+                                "Minimum analytical topography (m)",
+                                "Maximum analytical topography (m)"
                               };
       for (unsigned int i=0; i<sizeof(columns)/sizeof(columns[0]); ++i)
         {
@@ -154,7 +193,9 @@ namespace aspect
 
       output_stats.precision(4);
       output_stats << min_topography << " m, "
-                   << max_topography << " m";
+                   << max_topography << " m, "
+                   << min_analytical_topography << " m, "
+                   << max_analytical_topography << " m";
 
       // Write the solution to file
 
@@ -169,7 +210,7 @@ namespace aspect
       // Just return stats if text output is not required at all or not needed at this time
       if (!write_to_file || ((this->get_time() < last_output_time + output_interval)
                              && (this->get_timestep_number() != 0)))
-        return std::pair<std::string, std::string> ("Topography min/max:",
+        return std::pair<std::string, std::string> ("Predicted and analytical topography min/max:",
                                                     output_stats.str());
 
       std::string filename = this->get_output_directory() +
@@ -191,7 +232,7 @@ namespace aspect
 
           file << "# "
                << ((dim==2)? "x y" : "x y z")
-               << " topography" << std::endl;
+               << " topography" << ((analytical_solution_example != 0)? " analytical topography" : "") << std::endl;
 
           // first write out the data we have created locally
           file << output_file.str();
@@ -242,7 +283,7 @@ namespace aspect
           last_output_time = last_output_time + std::floor((this->get_time()-last_output_time)/output_interval*magic) * output_interval/magic;
         }
 
-      return std::pair<std::string, std::string> ("Topography min/max:",
+      return std::pair<std::string, std::string> ("Predicted and analytical topography min/max:",
                                                   output_stats.str());
     }
 
@@ -267,14 +308,6 @@ namespace aspect
                              "Units: years if the "
                              "'Use years in output instead of seconds' parameter is set; "
                              "seconds otherwise.");
-          prm.declare_entry ("Time to t1", "0.00003",
-                             Patterns::Double (0),
-                             "The time of the second timestep (t1) "
-                             "at which the initial topography is added "
-                             "to the mesh. "
-                             "Units: years if the "
-                             "'Use years in output instead of seconds' parameter is set; "
-                             "seconds otherwise.");
           prm.declare_entry ("Analytical solution of example", "1",
                              Patterns::Integer (0),
                              "The number of the diffusion example for "
@@ -288,9 +321,7 @@ namespace aspect
                              "Units: m2/s. ");
           prm.declare_entry ("Initial sinusoidal topography amplitude", "0.5",
                              Patterns::Double (0),
-                             "The maximum amplitude of the sinusoidal topography "
-                             "that is added at the second timestep (t1) "
-                             "to the mesh. "
+                             "The maximum amplitude of the initial sinusoidal topography. "
                              "Units: m. ");
         }
         prm.leave_subsection();
@@ -309,13 +340,11 @@ namespace aspect
         {
           write_to_file        = prm.get_bool ("Output to file");
           output_interval = prm.get_double ("Time between text output");
-          t1 = prm.get_double ("Time to t1");
           if (this->convert_output_to_years())
             {
               output_interval *= year_in_seconds;
-              t1 *= year_in_seconds;
             }
-          analytical_solution_example = prm.get_double ("Analytical solution of example");
+          analytical_solution_example = prm.get_integer ("Analytical solution of example");
           kappa = prm.get_double ("Diffusivity");
           amplitude = prm.get_double ("Initial sinusoidal topography amplitude");
         }
@@ -347,11 +376,12 @@ namespace aspect
   {
     ASPECT_REGISTER_POSTPROCESSOR(AnalyticalTopography,
                                   "analytical topography",
-                                  "A postprocessor intended for use with a deforming top surface.  After every step "
+                                  "A postprocessor intended for use with a deforming top surface. After every step "
                                   "it loops over all the vertices on the top surface and determines the "
                                   "maximum and minimum topography relative to a reference datum (initial "
-                                  "box height for a box geometry model or initial radius for a "
-                                  "sphere/spherical shell geometry model). "
+                                  "box height). "
+                                  "If 'Analytical solution of example' is set to 1 or 2, the analytical solution of "
+                                  "the topography of a decaying hill is also written to file. "
                                   "If 'Topography.Output to file' is set to true, also outputs topography "
                                   "into text files named `topography.NNNNN' in the output directory, "
                                   "where NNNNN is the number of the time step.\n"
