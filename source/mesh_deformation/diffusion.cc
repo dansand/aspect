@@ -42,9 +42,9 @@ namespace aspect
     template <int dim>
     Diffusion<dim>::Diffusion()
       :
-      diffusivity(0),
+      diffusivity(0.),
       start_time(std::numeric_limits<double>::quiet_NaN()),
-      current_time(0),
+      current_time(0.),
       last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
       time_between_diffusion(std::numeric_limits<double>::max()),
       start_timestep(0),
@@ -86,11 +86,13 @@ namespace aspect
       // on the time or timestep interval between applications.
       if (current_timestep_number != 0)
         {
-          if ((std::isnan(last_diffusion_time) && current_time >= start_time + time_between_diffusion)
-              || (std::isnan(last_diffusion_time) && current_timestep_number >= start_timestep + timesteps_between_diffusion))
+          if (std::isnan(last_diffusion_time)
+              && ((current_time >= start_time + time_between_diffusion)
+                  || (current_timestep_number >= start_timestep + timesteps_between_diffusion)))
             apply_diffusion = true;
-          else if ((current_time >= last_diffusion_time + time_between_diffusion)
-                   || (current_timestep_number >= last_diffusion_timestep + timesteps_between_diffusion))
+          else if (!std::isnan(last_diffusion_time)
+                   && ((current_time >= last_diffusion_time + time_between_diffusion)
+                       || (current_timestep_number >= last_diffusion_timestep + timesteps_between_diffusion)))
             apply_diffusion = true;
           else
             apply_diffusion = false;
@@ -491,13 +493,13 @@ namespace aspect
       {
         prm.enter_subsection("Diffusion");
         {
-          prm.declare_entry("Hillslope transport coefficient", "0.5",
+          prm.declare_entry("Hillslope transport coefficient", "1e-6",
                             Patterns::Double(0),
                             "The hillslope transport coefficient used to "
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
                             "and depositional processes. Units: m2/s. ");
-          prm.declare_entry("Time between diffusion", boost::lexical_cast<std::string>(std::numeric_limits<double>::max()),
+          prm.declare_entry("Time between diffusion", "1e20",
                             Patterns::Double(0,std::numeric_limits<double>::max()),
                             "The time between each application of diffusion. "
                             "Units: years if the "
