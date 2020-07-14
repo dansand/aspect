@@ -26,6 +26,7 @@
 #include <aspect/simulator_access.h>
 #include <aspect/material_model/rheology/diffusion_creep.h>
 #include <aspect/material_model/rheology/dislocation_creep.h>
+#include <aspect/material_model/rheology/drucker_prager.h>
 #include <aspect/material_model/equation_of_state/multicomponent_incompressible.h>
 #include <aspect/material_model/rheology/elasticity.h>
 
@@ -48,7 +49,7 @@ namespace aspect
       public:
         PlasticAdditionalOutputs(const unsigned int n_points);
 
-        virtual std::vector<double> get_nth_output(const unsigned int idx) const;
+        std::vector<double> get_nth_output(const unsigned int idx) const override;
 
         /**
          * Cohesions at the evaluation points passed to
@@ -65,7 +66,7 @@ namespace aspect
         std::vector<double> friction_angles;
 
         /**
-         * The area where the viscous stress exceeds the plastic yield strength,
+         * The area where the viscous stress exceeds the plastic yield stress,
          * and viscosity is rescaled back to the yield envelope.
          */
         std::vector<double> yielding;
@@ -130,8 +131,8 @@ namespace aspect
     {
       public:
 
-        virtual void evaluate(const MaterialModel::MaterialModelInputs<dim> &in,
-                              MaterialModel::MaterialModelOutputs<dim> &out) const;
+        void evaluate(const MaterialModel::MaterialModelInputs<dim> &in,
+                      MaterialModel::MaterialModelOutputs<dim> &out) const override;
 
         /**
          * Return whether the model is compressible or not.  Incompressibility
@@ -143,21 +144,19 @@ namespace aspect
         *
         * This material model is incompressible.
          */
-        virtual bool is_compressible () const;
+        bool is_compressible () const override;
 
-        virtual double reference_viscosity () const;
+        double reference_viscosity () const override;
 
         static
         void
         declare_parameters (ParameterHandler &prm);
 
-        virtual
         void
-        parse_parameters (ParameterHandler &prm);
+        parse_parameters (ParameterHandler &prm) override;
 
-        virtual
         void
-        create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const;
+        create_additional_named_outputs (MaterialModel::MaterialModelOutputs<dim> &out) const override;
 
         double get_min_strain_rate() const;
 
@@ -252,14 +251,7 @@ namespace aspect
          */
         ComponentMask get_volumetric_composition_mask() const;
 
-        std::vector<double> angles_internal_friction;
-        std::vector<double> cohesions;
         std::vector<double> exponents_stress_limiter;
-
-        /**
-         * Limit maximum yield stress from drucker-prager.
-         */
-        double max_yield_strength;
 
         /**
          * temperature gradient added to temperature used in the flow law.
@@ -274,16 +266,25 @@ namespace aspect
         Rheology::DiffusionCreep<dim> diffusion_creep;
         Rheology::DislocationCreep<dim> dislocation_creep;
 
-       /** 
-        * Object for computing viscoelastic viscosities and stresses.
-        */ 
-       Rheology::Elasticity<dim> elastic_rheology;
+        /*
+         * Objects for computing plastic stresses, viscosities, and additional outputs
+         */
+        Rheology::DruckerPrager<dim> drucker_prager_plasticity;
 
-      /**
-       * Whether to include viscoelasticity in the constitutive formulation.
-       */
-      bool use_elasticity;
+        /*
+         * Input parameters for the drucker prager plasticity.
+         */
+        Rheology::DruckerPragerParameters drucker_prager_parameters;
 
+        /**
+         * Object for computing viscoelastic viscosities and stresses.
+         */
+        Rheology::Elasticity<dim> elastic_rheology;
+
+        /**
+         * Whether to include viscoelasticity in the constitutive formulation.
+         */
+        bool use_elasticity;
     };
 
   }
