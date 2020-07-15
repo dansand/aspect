@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 by the authors of the ASPECT code.
+  Copyright (C) 2019 - 2020 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -70,7 +70,7 @@ namespace aspect
       Elasticity<dim>::declare_parameters (ParameterHandler &prm)
       {
         prm.declare_entry ("Elastic shear moduli", "75.0e9",
-                           Patterns::List(Patterns::Double(0)),
+                           Patterns::List(Patterns::Double (0.)),
                            "List of elastic shear moduli, $G$, "
                            "for background material and compositional fields, "
                            "for a total of N+1 values, where N is the number of compositional fields. "
@@ -88,7 +88,7 @@ namespace aspect
                            "'unspecified', which throws an exception during runtime. In order for "
                            "the model to run the user must select 'true' or 'false'.");
         prm.declare_entry ("Fixed elastic time step", "1.e3",
-                           Patterns::Double (0),
+                           Patterns::Double (0.),
                            "The fixed elastic time step $dte$. Units: years if the "
                            "'Use years in output instead of seconds' parameter is set; "
                            "seconds otherwise.");
@@ -197,7 +197,7 @@ namespace aspect
       {
         if (out.template get_additional_output<ElasticAdditionalOutputs<dim> >() == nullptr)
           {
-            const unsigned int n_points = out.viscosities.size();
+            const unsigned int n_points = out.n_evaluation_points();
             out.additional_outputs.push_back(
               std_cxx14::make_unique<ElasticAdditionalOutputs<dim>> (n_points));
           }
@@ -219,11 +219,11 @@ namespace aspect
         if (force_out == nullptr)
           return;
 
-        if (in.current_cell.state() == IteratorState::valid && this->get_timestep_number() > 0 && in.strain_rate.size() > 0)
+        if (in.current_cell.state() == IteratorState::valid && this->get_timestep_number() > 0 && in.requests_property(MaterialProperties::reaction_terms))
           {
             const double dte = elastic_timestep();
 
-            for (unsigned int i=0; i < in.position.size(); ++i)
+            for (unsigned int i=0; i < in.n_evaluation_points(); ++i)
               {
                 // Get old stresses from compositional fields
                 SymmetricTensor<2,dim> stress_old;
@@ -250,11 +250,11 @@ namespace aspect
                                               const std::vector<double> &average_elastic_shear_moduli,
                                               MaterialModel::MaterialModelOutputs<dim> &out) const
       {
-        if (in.current_cell.state() == IteratorState::valid && this->get_timestep_number() > 0 && in.strain_rate.size() > 0)
+        if (in.current_cell.state() == IteratorState::valid && this->get_timestep_number() > 0 && in.requests_property(MaterialProperties::reaction_terms))
           {
             // Get old (previous time step) velocity gradients
-            std::vector<Point<dim> > quadrature_positions(in.position.size());
-            for (unsigned int i=0; i < in.position.size(); ++i)
+            std::vector<Point<dim> > quadrature_positions(in.n_evaluation_points());
+            for (unsigned int i=0; i < in.n_evaluation_points(); ++i)
               quadrature_positions[i] = this->get_mapping().transform_real_to_unit_cell(in.current_cell, in.position[i]);
 
             // FEValues requires a quadrature and we provide the default quadrature
@@ -272,7 +272,7 @@ namespace aspect
             const double dte = elastic_timestep();
             const double dt = this->get_timestep();
 
-            for (unsigned int i=0; i < in.position.size(); ++i)
+            for (unsigned int i=0; i < in.n_evaluation_points(); ++i)
               {
                 // Get old stresses from compositional fields
                 SymmetricTensor<2,dim> stress_old;
@@ -338,7 +338,7 @@ namespace aspect
 
 
       template <int dim>
-      std::vector<double>
+      const std::vector<double> &
       Elasticity<dim>::get_elastic_shear_moduli () const
       {
         return elastic_shear_moduli;
@@ -354,6 +354,21 @@ namespace aspect
       {
         const double dte = elastic_timestep();
         return ( viscosity * dte ) / ( dte + ( viscosity / elastic_shear_modulus ) );
+      }
+
+
+
+      template <int dim>
+      double
+      Elasticity<dim>::
+      calculate_viscoelastic_strain_rate(const SymmetricTensor<2,dim> &strain_rate,
+                                         const SymmetricTensor<2,dim> &stress,
+                                         const double shear_modulus) const
+      {
+        const SymmetricTensor<2,dim> edot = 2. * (deviator(strain_rate)) + stress /
+                                            (shear_modulus * elastic_timestep());
+
+        return std::sqrt(std::fabs(second_invariant(edot)));
       }
     }
   }
@@ -373,5 +388,7 @@ namespace aspect
   }
 
     ASPECT_INSTANTIATE(INSTANTIATE)
+
+#undef INSTANTIATE
   }
 }

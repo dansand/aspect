@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 by the authors of the ASPECT code.
+  Copyright (C) 2019 - 2020 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -51,7 +51,7 @@ namespace aspect
                                              const double default_viscosity)
       {
         prm.declare_entry ("Viscosity", std::to_string(default_viscosity),
-                           Patterns::Double (0),
+                           Patterns::Double (0.),
                            "The value of the viscosity $\\eta$. Units: $kg/m/s$ or $Pa s$.");
       }
 
