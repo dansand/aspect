@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2020 by the authors of the ASPECT code.
+  Copyright (C) 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -88,8 +88,6 @@ namespace aspect
   }
 
     ASPECT_INSTANTIATE(INSTANTIATE)
-
-#undef INSTANTIATE
   }
 }
 
