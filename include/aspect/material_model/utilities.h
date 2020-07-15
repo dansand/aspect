@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2020 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -268,6 +268,46 @@ namespace aspect
                             const std::vector<double> &parameter_values,
                             const CompositionalAveragingOperation &average_type);
 
+      /**
+       * Utilities for material models with multiple phases
+       */
+      namespace PhaseUtilities
+      {
+        /**
+         * Enumeration for selecting which averaging scheme to use when
+         * averaging the properties of different phases.
+         * Select between arithmetic and logarithmic.
+        */
+        enum PhaseAveragingOperation
+        {
+          arithmetic,
+          logarithmic
+        };
+      }
+
+      /**
+      * Material models compute output quantities such as the viscosity, the
+      * density, etc. For some models, these values may depend on the phase in
+      * addition to the composition, and more than one phase field might have
+      * nonzero values at a given quadrature point. This means that properties
+      * for each composition have to be averaged based on the fractions of each
+      * phase field present. This function performs this type of averaging.
+      * The averaging is based on the choice in @p operation. Averaging is conducted
+      * over the phase functions given in @phase_function_values, with
+      * @parameter_values containing values of all individual phases. Unlike the average_value
+      * function defined for compositions, averaging in this function is calculated based
+      * on phase functions and the change of variables on the trajectory of phase boundaries.
+      * Thus on a single phase boundary, values of variables change gradually from one phase
+      * to the other. The values of the phase function used to average the properties varies
+      * between 0 and 1.
+      */
+      double phase_average_value (const std::vector<double> &phase_function_values,
+                                  const std::vector<unsigned int> &n_phases_per_composition,
+                                  const std::vector<double> &parameter_values,
+                                  const unsigned int composition,
+                                  const PhaseUtilities::PhaseAveragingOperation operation = PhaseUtilities::arithmetic);
+
+
 
       /**
        * A data structure with all inputs for the
@@ -291,6 +331,18 @@ namespace aspect
         double pressure;
         double depth;
         double pressure_depth_derivative;
+
+        /**
+         * This parameter determines which phase function of all the stored
+         * functions to compute. Phase functions are numbered consecutively,
+         * starting at 0 and the interpretation of their output is up to the
+         * calling side. For example the first phase function could be used to
+         * indicate a viscosity jump in the first compositional field,
+         * while the second function indicates a density jump in all
+         * compositions. None of this is known to the PhaseFunction object,
+         * which only has information that there are two phase functions
+         * and what their properties are.
+         */
         unsigned int phase_index;
       };
 
@@ -328,6 +380,12 @@ namespace aspect
            * phase transition number @p phase_index.
            */
           double get_transition_slope (const unsigned int phase_index) const;
+
+          /**
+           * Return how many phase transitions there are for each composition.
+           */
+          const std::vector<unsigned int> &
+          n_phase_transitions_for_each_composition () const;
 
           /**
            * Declare the parameters this class takes through input files.
