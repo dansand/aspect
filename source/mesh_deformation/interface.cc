@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2020 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -20,6 +20,8 @@
 
 
 #include <aspect/mesh_deformation/interface.h>
+#include <aspect/geometry_model/initial_topography_model/zero_topography.h>
+#include <aspect/geometry_model/box.h>
 #include <aspect/simulator.h>
 #include <aspect/global.h>
 
@@ -28,7 +30,6 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/mapping_q1_eulerian.h>
 
 #include <deal.II/lac/sparsity_tools.h>
@@ -68,7 +69,9 @@ namespace aspect
     MeshDeformationHandler<dim>::MeshDeformationHandler (Simulator<dim> &simulator)
       : sim(simulator),  // reference to the simulator that owns the MeshDeformationHandler
         mesh_deformation_fe (FE_Q<dim>(1),dim), // Q1 elements which describe the mesh geometry
-        mesh_deformation_dof_handler (sim.triangulation)
+        mesh_deformation_dof_handler (sim.triangulation),
+        topo_model(),
+        include_initial_topography(false)
     {}
 
     template <int dim>
@@ -90,6 +93,24 @@ namespace aspect
       void *,
       aspect::internal::Plugins::PluginList<Interface<2> >,
       aspect::internal::Plugins::PluginList<Interface<3> > > registered_plugins;
+    }
+
+
+    template <int dim>
+    void
+    MeshDeformationHandler<dim>::initialize ()
+    {
+      // Get pointer to initial topography model
+      topo_model = const_cast<InitialTopographyModel::Interface<dim>*>(&this->get_initial_topography_model());
+      // In case we prescribed initial topography, we should take this into
+      // account. However, it is not included in the mesh displacements,
+      // so we need to fetch it separately.
+      // TODO check that for refinement/mesh displacement after t0, getting the initial topography
+      // does not differ from the initial topography at the new point too much,
+      // or whether it is better to store and redistribute the initial initial topography
+      // in a similar way as the mesh displacements.
+      if (dynamic_cast<InitialTopographyModel::ZeroTopography<dim>*>(topo_model) == nullptr)
+        include_initial_topography = true;
     }
 
 
@@ -348,18 +369,14 @@ namespace aspect
       for (periodic_boundary_pairs::iterator p = pbp.begin(); p != pbp.end(); ++p)
         DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler, (*p).first.first, (*p).first.second, (*p).second, mesh_velocity_constraints);
 
-      // Zero out the displacement for the zero-velocity boundaries
-      // if the boundary is not in the set of tangential mesh boundaries and not in the set of mesh deformation boundary indicators
+      // Zero out the displacement for the zero-velocity boundary indicators
+      // that are not mesh deformation boundary indicators
       for (std::set<types::boundary_id>::const_iterator p = sim.boundary_velocity_manager.get_zero_boundary_velocity_indicators().begin();
            p != sim.boundary_velocity_manager.get_zero_boundary_velocity_indicators().end(); ++p)
-        if (tangential_mesh_boundary_indicators.find(*p) == tangential_mesh_boundary_indicators.end())
+        if (mesh_deformation_boundary_indicators_set.find(*p) == mesh_deformation_boundary_indicators_set.end())
           {
-            if (mesh_deformation_boundary_indicators_set.find(*p) == mesh_deformation_boundary_indicators_set.end())
-              {
-                VectorTools::interpolate_boundary_values (*sim.mapping,
-                                                          mesh_deformation_dof_handler, *p,
-                                                          Functions::ZeroFunction<dim>(dim), mesh_velocity_constraints);
-              }
+            VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
+                                                      ZeroFunction<dim>(dim), mesh_velocity_constraints);
           }
 
       // Zero out the displacement for the prescribed velocity boundaries
@@ -371,9 +388,8 @@ namespace aspect
             {
               if (mesh_deformation_boundary_indicators_set.find(p->first) == mesh_deformation_boundary_indicators_set.end())
                 {
-                  VectorTools::interpolate_boundary_values (*sim.mapping,
-                                                            mesh_deformation_dof_handler, p->first,
-                                                            Functions::ZeroFunction<dim>(dim), mesh_velocity_constraints);
+                  VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, p->first,
+                                                            ZeroFunction<dim>(dim), mesh_velocity_constraints);
                 }
             }
         }
@@ -582,6 +598,67 @@ namespace aspect
 
 
     template <int dim>
+    void MeshDeformationHandler<dim>::set_initial_topography()
+    {
+      LinearAlgebra::Vector distributed_initial_topography;
+      distributed_initial_topography.reinit(mesh_locally_owned, sim.mpi_communicator);
+
+      if (!include_initial_topography)
+        distributed_initial_topography = 0.;
+      else
+        {
+          const std::vector<Point<dim> > support_points
+            = mesh_deformation_fe.base_element(0).get_unit_support_points();
+
+          const Quadrature<dim> quad(support_points);
+          const UpdateFlags update_flags = UpdateFlags(update_quadrature_points);
+          FEValues<dim> fs_fe_values (*sim.mapping, mesh_deformation_fe, quad, update_flags);
+
+          const unsigned int n_q_points = fs_fe_values.n_quadrature_points,
+                             dofs_per_cell = fs_fe_values.dofs_per_cell;
+
+          std::vector<types::global_dof_index> cell_dof_indices (dofs_per_cell);
+
+          typename DoFHandler<dim>::active_cell_iterator cell = mesh_deformation_dof_handler.begin_active(),
+                                                         endc = mesh_deformation_dof_handler.end();
+
+          for (; cell!=endc; ++cell)
+            if (cell->is_locally_owned())
+              {
+                cell->get_dof_indices (cell_dof_indices);
+
+                fs_fe_values.reinit (cell);
+                for (unsigned int j=0; j<n_q_points; ++j)
+                  {
+                    Point<dim-1> surface_point;
+                    std::array<double, dim> natural_coord = this->get_geometry_model().cartesian_to_natural_coordinates(fs_fe_values.quadrature_point(j));
+                    if (const GeometryModel::Box<dim> *geometry = dynamic_cast<const GeometryModel::Box<dim>*> (&this->get_geometry_model()))
+                      {
+                        for (unsigned int d=0; d<dim-1; ++d)
+                          surface_point[d] = natural_coord[d];
+                      }
+                    else
+                      {
+                        for (unsigned int d=1; d<dim; ++d)
+                          surface_point[d] = natural_coord[d];
+                      }
+                    // Get the topography at this point.
+                    const double topo = topo_model->value(surface_point);
+
+                    // TODO adapt to radial topography
+                    const unsigned int support_point_index
+                      = mesh_deformation_fe.component_to_system_index(dim-1,/*dof index within component=*/ j);
+                    distributed_initial_topography[cell_dof_indices[support_point_index]] = topo;
+                  }
+              }
+        }
+
+      distributed_initial_topography.compress(VectorOperation::insert);
+      initial_topography = distributed_initial_topography;
+    }
+
+
+    template <int dim>
     void MeshDeformationHandler<dim>::interpolate_mesh_velocity()
     {
       // Interpolate the mesh vertex velocity onto the Stokes velocity system for use in ALE corrections
@@ -658,11 +735,16 @@ namespace aspect
                                                mesh_locally_relevant);
 
       mesh_displacements.reinit(mesh_locally_owned, mesh_locally_relevant, sim.mpi_communicator);
+      initial_topography.reinit(mesh_locally_owned, mesh_locally_relevant, sim.mpi_communicator);
       fs_mesh_velocity.reinit(mesh_locally_owned, mesh_locally_relevant, sim.mpi_communicator);
 
-      // if we are just starting, we need to initialize the mesh displacement vector.
-      if (sim.timestep_number == 0)
-        mesh_displacements = 0.;
+      // if we are just starting, we need to initialize the mesh displacement vector
+      // and set the initial topography
+      if (sim.time == 0)
+        {
+          mesh_displacements = 0.;
+          set_initial_topography();
+        }
 
       // We would like to make sure that the mesh stays conforming upon
       // redistribution, so we construct mesh_vertex_constraints, which
@@ -729,6 +811,13 @@ namespace aspect
     }
 
 
+    template <int dim>
+    const LinearAlgebra::Vector &
+    MeshDeformationHandler<dim>::get_initial_topography () const
+    {
+      return initial_topography;
+    }
+
 
     template <int dim>
     std::string
@@ -777,7 +866,5 @@ namespace aspect
   get_valid_model_names_pattern<dim> ();
 
     ASPECT_INSTANTIATE(INSTANTIATE)
-
-#undef INSTANTIATE
   }
 }

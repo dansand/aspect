@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -130,7 +130,7 @@ namespace aspect
          */
         struct SurfaceAdvection
         {
-          enum Direction { normal, vertical };
+          enum Direction { normal, vertical, geometric_normal };
         };
 
         /**

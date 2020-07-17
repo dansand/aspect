@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2020 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -160,9 +160,6 @@ namespace aspect
            (Utilities::MPI::
             this_mpi_process(mpi_communicator)
             == 0)),
-
-    statistics_last_write_size (0),
-    statistics_last_hash (0),
 
     computing_timer (mpi_communicator,
                      pcout,
@@ -351,23 +348,16 @@ namespace aspect
     // Initialize the mesh deformation handler
     if (parameters.mesh_deformation_enabled)
       {
-        // Models with deformed boundaries require
-        // the full A block to converge consistently
-        parameters.use_full_A_block_preconditioner = true;
-
         // Allocate the MeshDeformationHandler object
         mesh_deformation = std_cxx14::make_unique<MeshDeformation::MeshDeformationHandler<dim>>(*this);
         mesh_deformation->initialize_simulator(*this);
         mesh_deformation->parse_parameters(prm);
+        mesh_deformation->initialize();
       }
 
     // Initialize the melt handler
     if (parameters.include_melt_transport)
       {
-        // Models with melt transport require
-        // the full A block to converge consistently
-        parameters.use_full_A_block_preconditioner = true;
-
         melt_handler->initialize_simulator (*this);
         melt_handler->initialize();
       }
@@ -467,8 +457,7 @@ namespace aspect
     // there is no open boundary to balance the pressure.
     do_pressure_rhs_compatibility_modification = ((material_model->is_compressible() && !parameters.include_melt_transport)
                                                   ||
-                                                  (parameters.include_melt_transport && !material_model->is_compressible())
-                                                  || parameters.enable_prescribed_dilation)
+                                                  (parameters.include_melt_transport && !material_model->is_compressible()))
                                                  &&
                                                  (open_velocity_boundary_indicators.size() == 0);
 
@@ -880,207 +869,6 @@ namespace aspect
 
 
 
-  namespace
-  {
-    template <int dim>
-    bool solver_scheme_solves_advection_equations(const Parameters<dim> &parameters)
-    {
-      // Check if we use a solver scheme that solves the advection equations
-      switch (parameters.nonlinear_solver)
-        {
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_single_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::iterated_Advection_and_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_iterated_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::iterated_Advection_and_Newton_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_iterated_Newton_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_no_Stokes:
-            return true;
-
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_iterated_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_single_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::first_timestep_only_single_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_no_Stokes:
-            return false;
-        }
-      Assert(false, ExcNotImplemented());
-      return false;
-    }
-
-
-
-    template <int dim>
-    bool solver_scheme_solves_stokes_equations(const Parameters<dim> &parameters)
-    {
-      // Check if we use a solver scheme that solves the advection equations
-      switch (parameters.nonlinear_solver)
-        {
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_single_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::iterated_Advection_and_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_iterated_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_iterated_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_single_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::iterated_Advection_and_Newton_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_iterated_Newton_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::first_timestep_only_single_Stokes:
-            return true;
-
-          case Parameters<dim>::NonlinearSolver::Kind::single_Advection_no_Stokes:
-          case Parameters<dim>::NonlinearSolver::Kind::no_Advection_no_Stokes:
-            return false;
-        }
-      Assert(false, ExcNotImplemented());
-      return false;
-    }
-
-
-
-    template <int dim>
-    bool compositional_fields_need_matrix_block(const Introspection<dim> &introspection)
-    {
-      // Check if any compositional field method actually requires a matrix block
-      // (as opposed to all are advected by other means or prescribed fields)
-      for (unsigned int c=0; c<introspection.n_compositional_fields; ++c)
-        {
-          const typename Simulator<dim>::AdvectionField adv_field (Simulator<dim>::AdvectionField::composition(c));
-          switch (adv_field.advection_method(introspection))
-            {
-              case Parameters<dim>::AdvectionFieldMethod::fem_field:
-              case Parameters<dim>::AdvectionFieldMethod::fem_melt_field:
-              case Parameters<dim>::AdvectionFieldMethod::prescribed_field_with_diffusion:
-                return true;
-              case Parameters<dim>::AdvectionFieldMethod::particles:
-              case Parameters<dim>::AdvectionFieldMethod::volume_of_fluid:
-              case Parameters<dim>::AdvectionFieldMethod::static_field:
-              case Parameters<dim>::AdvectionFieldMethod::prescribed_field:
-                break;
-              default:
-                Assert (false, ExcNotImplemented());
-            }
-        }
-      return false;
-    }
-  }
-
-
-
-  template <int dim>
-  Table<2,DoFTools::Coupling>
-  Simulator<dim>::
-  setup_system_matrix_coupling () const
-  {
-    Table<2,DoFTools::Coupling> coupling(introspection.n_components,
-                                         introspection.n_components);
-
-    // Start by assuming nothing couples
-    coupling.fill (DoFTools::none);
-
-    const typename Introspection<dim>::ComponentIndices &x
-      = introspection.component_indices;
-
-    // Determine which blocks in the Stokes blocks
-    // of the matrix are in use. At the moment this distinguishes
-    // 3 solvers: melt transport, matrix-free multigrid, and the default
-    // matrix based algebraic multigrid.
-    if (solver_scheme_solves_stokes_equations(parameters))
-      {
-        // The matrix-free solver does not work with melt transport
-        Assert(!(parameters.include_melt_transport && stokes_matrix_free),
-               ExcNotImplemented());
-
-        if (stokes_matrix_free)
-          {
-            // nothing couples in the matrix free solver
-          }
-        else if (parameters.include_melt_transport)
-          {
-            // For the melt transport solver all velocities and pressures couple with themselves.
-            // Additionally solid velocities couple with all pressures, and all pressures
-            // couple with solid velocities.
-
-            const unsigned int first_fluid_c_i = introspection.variable("fluid velocity").first_component_index;
-
-            for (unsigned int d=0; d<dim; ++d)
-              {
-                for (unsigned int c=0; c<dim; ++c)
-                  {
-                    coupling[x.velocities[c]][x.velocities[d]] = DoFTools::always;
-                    coupling[first_fluid_c_i+c][first_fluid_c_i+d] = DoFTools::always;
-                  }
-
-                coupling[x.velocities[d]][
-                  introspection.variable("compaction pressure").first_component_index] = DoFTools::always;
-                coupling[introspection.variable("compaction pressure").first_component_index]
-                [x.velocities[d]]
-                  = DoFTools::always;
-                coupling[x.velocities[d]]
-                [introspection.variable("fluid pressure").first_component_index]
-                  = DoFTools::always;
-                coupling[introspection.variable("fluid pressure").first_component_index]
-                [x.velocities[d]]
-                  = DoFTools::always;
-              }
-
-            coupling[introspection.variable("fluid pressure").first_component_index]
-            [introspection.variable("fluid pressure").first_component_index]
-              = DoFTools::always;
-            coupling[introspection.variable("compaction pressure").first_component_index]
-            [introspection.variable("compaction pressure").first_component_index]
-              = DoFTools::always;
-          }
-        else
-          {
-            // The AMG matrix based solver: all velocities couple with all velocities,
-            // pressure couples with all velocities and the other way around,
-            // and pressures only couple with themselves for equal order elements
-            for (unsigned int c=0; c<dim; ++c)
-              for (unsigned int d=0; d<dim; ++d)
-                coupling[x.velocities[c]][x.velocities[d]] = DoFTools::always;
-
-            for (unsigned int d=0; d<dim; ++d)
-              {
-                coupling[x.velocities[d]][x.pressure] = DoFTools::always;
-                coupling[x.pressure][x.velocities[d]] = DoFTools::always;
-              }
-
-            // For equal-order interpolation, we need a stabilization term
-            // in the bottom right of Stokes matrix. Make sure we have the
-            // necessary entries.
-            if (parameters.use_equal_order_interpolation_for_stokes == true)
-              coupling[x.pressure][x.pressure] = DoFTools::always;
-          }
-      }
-
-    // Only enable temperature coupling if temperature block is needed
-    if (solver_scheme_solves_advection_equations(parameters)
-        &&
-        parameters.temperature_method != Parameters<dim>::AdvectionFieldMethod::prescribed_field)
-      coupling[x.temperature][x.temperature] = DoFTools::always;
-
-    // Only enable composition coupling if a composition block is needed
-    if (solver_scheme_solves_advection_equations(parameters)
-        &&
-        compositional_fields_need_matrix_block(introspection))
-      {
-        // If we need at least one compositional field block, we
-        // create a matrix block in the first compositional block. Its sparsity
-        // pattern will later be used to allocate composition matrices as
-        // needed. All other matrix blocks are left empty to save memory.
-        coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
-      }
-
-    // If we are using volume of fluid interface tracking, create a matrix block in the
-    // field corresponding to the volume fraction.
-    if (parameters.volume_of_fluid_tracking_enabled)
-      {
-        const unsigned int volume_of_fluid_block = volume_of_fluid_handler->field_struct_for_field_index(0)
-                                                   .volume_fraction.first_component_index;
-        coupling[volume_of_fluid_block][volume_of_fluid_block] = DoFTools::always;
-      }
-
-    return coupling;
-  }
-
-
   template <int dim>
   void
   Simulator<dim>::
@@ -1088,9 +876,117 @@ namespace aspect
   {
     system_matrix.clear ();
 
-    const Table<2,DoFTools::Coupling> coupling = setup_system_matrix_coupling();
-    LinearAlgebra::BlockDynamicSparsityPattern sp;
+    bool have_fem_compositional_field = false;
+    for (unsigned int c=0; c<introspection.n_compositional_fields; ++c)
+      {
+        const AdvectionField adv_field (AdvectionField::composition(c));
+        if (adv_field.advection_method(introspection)==Parameters<dim>::AdvectionFieldMethod::fem_field
+            || adv_field.advection_method(introspection)==Parameters<dim>::AdvectionFieldMethod::fem_melt_field)
+          {
+            have_fem_compositional_field = true;
+            break;
+          }
+      }
 
+    Table<2,DoFTools::Coupling> coupling (introspection.n_components,
+                                          introspection.n_components);
+    coupling.fill (DoFTools::none);
+
+    // determine which blocks should be fillable in the matrix.
+    // note:
+    // - all velocities couple with all velocities
+    // - pressure couples with all velocities and the other way
+    //   around
+    // - temperature only couples with itself
+    // - compositional fields only couple with themselves
+    // - additionally, in models with melt transport fluid pressure
+    //   and compaction pressures couple with themselves
+    {
+      const typename Introspection<dim>::ComponentIndices &x
+        = introspection.component_indices;
+
+      for (unsigned int c=0; c<dim; ++c)
+        for (unsigned int d=0; d<dim; ++d)
+          coupling[x.velocities[c]][x.velocities[d]] = DoFTools::always;
+
+      if (parameters.include_melt_transport)
+        {
+          for (unsigned int d=0; d<dim; ++d)
+            {
+              coupling[x.velocities[d]][
+                introspection.variable("compaction pressure").first_component_index] = DoFTools::always;
+              coupling[introspection.variable("compaction pressure").first_component_index]
+              [x.velocities[d]]
+                = DoFTools::always;
+              coupling[x.velocities[d]]
+              [introspection.variable("fluid pressure").first_component_index]
+                = DoFTools::always;
+              coupling[introspection.variable("fluid pressure").first_component_index]
+              [x.velocities[d]]
+                = DoFTools::always;
+            }
+
+          coupling[introspection.variable("fluid pressure").first_component_index]
+          [introspection.variable("fluid pressure").first_component_index]
+            = DoFTools::always;
+          coupling[introspection.variable("compaction pressure").first_component_index]
+          [introspection.variable("compaction pressure").first_component_index]
+            = DoFTools::always;
+        }
+      else
+        {
+          for (unsigned int d=0; d<dim; ++d)
+            {
+              coupling[x.velocities[d]][x.pressure] = DoFTools::always;
+              coupling[x.pressure][x.velocities[d]] = DoFTools::always;
+            }
+        }
+      // Do not allocate a temperature matrix if no temperature
+      // solves are going to be performed.
+      if (!(parameters.nonlinear_solver == NonlinearSolver::Kind::no_Advection_iterated_Stokes
+            ||
+            parameters.nonlinear_solver == NonlinearSolver::Kind::no_Advection_no_Stokes
+            ||
+            parameters.nonlinear_solver == NonlinearSolver::Kind::first_timestep_only_single_Stokes))
+        coupling[x.temperature][x.temperature] = DoFTools::always;
+
+      // For equal-order interpolation, we need a stabilization term
+      // in the bottom right of Stokes matrix. Make sure we have the
+      // necessary entries.
+      if (parameters.use_equal_order_interpolation_for_stokes == true)
+        coupling[x.pressure][x.pressure] = DoFTools::always;
+
+      // If we have at least one compositional field that is a FEM field, we
+      // create a matrix block in the first compositional block. Its sparsity
+      // pattern will later be used to allocate composition matrices as
+      // needed.  All other matrix blocks are left empty here.
+      if (have_fem_compositional_field)
+        coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
+
+      // If we are using VolumeOfFluid interface tracking, create a matrix block in the
+      // field corresponding to the volume fraction.
+      if (parameters.volume_of_fluid_tracking_enabled)
+        {
+          const unsigned int volume_of_fluid_block = volume_of_fluid_handler->field_struct_for_field_index(0)
+                                                     .volume_fraction.first_component_index;
+          coupling[volume_of_fluid_block][volume_of_fluid_block] = DoFTools::always;
+        }
+      if (stokes_matrix_free)
+        {
+          // do not allocate memory for the Stokes matrix:
+          Assert(!parameters.include_melt_transport, ExcNotImplemented());
+          for (unsigned int c=0; c<dim; ++c)
+            for (unsigned int d=0; d<dim; ++d)
+              coupling[x.velocities[c]][x.velocities[d]] = DoFTools::none;
+          for (unsigned int d=0; d<dim; ++d)
+            {
+              coupling[x.velocities[d]][x.pressure] = DoFTools::none;
+              coupling[x.pressure][x.velocities[d]] = DoFTools::none;
+            }
+        }
+    }
+
+    LinearAlgebra::BlockDynamicSparsityPattern sp;
 #ifdef ASPECT_USE_PETSC
     sp.reinit (introspection.index_sets.system_relevant_partitioning);
 #else
@@ -1110,14 +1006,11 @@ namespace aspect
 
         const typename Introspection<dim>::ComponentIndices &x
           = introspection.component_indices;
-        if (parameters.use_discontinuous_temperature_discretization &&
-            solver_scheme_solves_advection_equations(parameters) &&
-            parameters.temperature_method != Parameters<dim>::AdvectionFieldMethod::prescribed_field)
+        if (parameters.use_discontinuous_temperature_discretization)
           face_coupling[x.temperature][x.temperature] = DoFTools::always;
 
-        if (parameters.use_discontinuous_composition_discretization &&
-            solver_scheme_solves_advection_equations(parameters) &&
-            compositional_fields_need_matrix_block(introspection))
+        // Only allocate composition 0 matrix if needed. Same as the non-DG case (see above)
+        if (parameters.use_discontinuous_composition_discretization && have_fem_compositional_field)
           face_coupling[x.compositional_fields[0]][x.compositional_fields[0]] = DoFTools::always;
 
         if (parameters.volume_of_fluid_tracking_enabled)
@@ -1153,29 +1046,19 @@ namespace aspect
 #else
     sp.compress();
 
-    // We may only allocate some of the matrix blocks, but the sparsity pattern
-    // will still create entries for hanging nodes and boundary conditions.
-    // These are unnecessary and are removed here.
-    for (unsigned int i=0; i<introspection.n_components; ++i)
+    // We only allocate a composition matrix block for composition 0 (see
+    // above). But even though we specify a coupling of DoFTools::none for the
+    // other composition blocks, entries for constrained entries for boundary
+    // conditions and hanging nodes are being created by
+    // make_sparsity_pattern. These are unnecessary, so we remove those
+    // entries here.
+    for (unsigned int c=1; c<introspection.n_compositional_fields; ++c)
       {
-        if (coupling[i][i] == DoFTools::none)
-          {
-            // The pressure is special, because it does not couple with itself,
-            // but if the velocity block is assembled we also need to keep pressure
-            // hanging node constraints. Thus skip clearing the
-            // sparsity pattern in that case.
-            if ((i == introspection.component_indices.pressure) &&
-                coupling[introspection.component_indices.velocities[0]][introspection.component_indices.velocities[0]] != DoFTools::none)
-              continue;
-
-            const unsigned int block = introspection.get_components_to_blocks()[i];
-
-            // TODO: using clear() would be nice here but clear() also resets the
-            // size, so just reinit():
-            sp.block(block,block).reinit(sp.block(block,block).locally_owned_range_indices(),
-                                         sp.block(block,block).locally_owned_domain_indices());
-            sp.block(block,block).compress();
-          }
+        const unsigned int block_idx = introspection.block_indices.compositional_fields[c];
+        // TODO: using clear() would be nice here but clear() also resets the
+        // size, so just reinit():
+        sp.block(block_idx, block_idx).reinit(sp.block(block_idx, block_idx).locally_owned_range_indices(),sp.block(block_idx, block_idx).locally_owned_domain_indices());
+        sp.block(block_idx, block_idx).compress();
       }
 
     system_matrix.reinit (sp);
@@ -1192,11 +1075,8 @@ namespace aspect
     Mp_preconditioner.reset ();
     system_preconditioner_matrix.clear ();
 
-    // The preconditioner matrix is only used for the Stokes block (velocity and Schur complement)
-    // and only needed if we actually solve iteratively and matrix-based
-    if (solver_scheme_solves_stokes_equations(parameters) == false)
-      return;
-    else if (parameters.stokes_solver_type == Parameters<dim>::StokesSolverType::block_gmg)
+    // The preconditioner matrix is only used for the Stokes block (velocity and Schur complement) and only needed if we actually solve iteratively and matrix-based
+    if (parameters.stokes_solver_type == Parameters<dim>::StokesSolverType::block_gmg)
       return;
     else if (parameters.stokes_solver_type == Parameters<dim>::StokesSolverType::block_amg)
       {
@@ -1214,17 +1094,9 @@ namespace aspect
     const typename Introspection<dim>::ComponentIndices &x
       = introspection.component_indices;
 
-    // velocity-velocity block (only block diagonal) is only
-    // needed if we use the simplified A block preconditioner
-    if (parameters.use_full_A_block_preconditioner == false)
-      for (unsigned int d=0; d<dim; ++d)
-        coupling[x.velocities[d]][x.velocities[d]] = DoFTools::always;
-
-    // TODO: The newton handler always assembles the preconditioner matrix
-    // even if it is not used. Fix that by modifying the newton assemblers.
-    if (newton_handler.get() != nullptr)
-      for (unsigned int d=0; d<dim; ++d)
-        coupling[x.velocities[d]][x.velocities[d]] = DoFTools::always;
+    // velocity-velocity block (only block diagonal):
+    for (unsigned int d=0; d<dim; ++d)
+      coupling[x.velocities[d]][x.velocities[d]] = DoFTools::always;
 
     // Schur complement block (pressure - pressure):
     if (parameters.include_melt_transport)
@@ -1287,8 +1159,7 @@ namespace aspect
       const unsigned int block_idx = introspection.block_indices.temperature;
       // TODO: using clear() would be nice here but clear() also resets the
       // size, so just reinit():
-      sp.block(block_idx, block_idx).reinit(sp.block(block_idx, block_idx).locally_owned_range_indices(),
-                                            sp.block(block_idx, block_idx).locally_owned_domain_indices());
+      sp.block(block_idx, block_idx).reinit(sp.block(block_idx, block_idx).locally_owned_range_indices(),sp.block(block_idx, block_idx).locally_owned_domain_indices());
       sp.block(block_idx, block_idx).compress();
     }
     // compositions:
@@ -1297,8 +1168,7 @@ namespace aspect
         const unsigned int block_idx = introspection.block_indices.compositional_fields[c];
         // TODO: using clear() would be nice here but clear() also resets the
         // size, so just reinit():
-        sp.block(block_idx, block_idx).reinit(sp.block(block_idx, block_idx).locally_owned_range_indices(),
-                                              sp.block(block_idx, block_idx).locally_owned_domain_indices());
+        sp.block(block_idx, block_idx).reinit(sp.block(block_idx, block_idx).locally_owned_range_indices(),sp.block(block_idx, block_idx).locally_owned_domain_indices());
         sp.block(block_idx, block_idx).compress();
       }
 
@@ -1328,7 +1198,7 @@ namespace aspect
         VectorTools::interpolate_boundary_values (*mapping,
                                                   dof_handler,
                                                   *p,
-                                                  Functions::ZeroFunction<dim>(introspection.n_components),
+                                                  ZeroFunction<dim>(introspection.n_components),
                                                   constraints,
                                                   introspection.component_masks.velocities);
 
@@ -1410,7 +1280,7 @@ namespace aspect
             VectorTools::interpolate_boundary_values (*mapping,
                                                       dof_handler,
                                                       p->first,
-                                                      Functions::ZeroFunction<dim>(introspection.n_components),
+                                                      ZeroFunction<dim>(introspection.n_components),
                                                       constraints,
                                                       mask);
           }
@@ -1552,35 +1422,20 @@ namespace aspect
   {
     // compute the various partitionings between processors and blocks
     // of vectors and matrices
-#if DEAL_II_VERSION_GTE(9,2,0)
-    introspection.system_dofs_per_block = DoFTools::count_dofs_per_fe_block (dof_handler,
-                                                                             introspection.get_components_to_blocks());
-#else
     DoFTools::count_dofs_per_block (dof_handler,
                                     introspection.system_dofs_per_block,
                                     introspection.get_components_to_blocks());
-#endif
-
     {
       IndexSet system_index_set = dof_handler.locally_owned_dofs();
-#if DEAL_II_VERSION_GTE(9,2,0)
-      introspection.index_sets.system_partitioning = system_index_set.split_by_block(introspection.system_dofs_per_block);
-#else
       aspect::Utilities::split_by_block (introspection.system_dofs_per_block,
                                          system_index_set,
                                          introspection.index_sets.system_partitioning);
-#endif
 
       DoFTools::extract_locally_relevant_dofs (dof_handler,
                                                introspection.index_sets.system_relevant_set);
-#if DEAL_II_VERSION_GTE(9,2,0)
-      introspection.index_sets.system_relevant_partitioning =
-        introspection.index_sets.system_relevant_set.split_by_block(introspection.system_dofs_per_block);
-#else
       aspect::Utilities::split_by_block (introspection.system_dofs_per_block,
                                          introspection.index_sets.system_relevant_set,
                                          introspection.index_sets.system_relevant_partitioning);
-#endif
 
       if (!parameters.include_melt_transport)
         {
@@ -1735,11 +1590,12 @@ namespace aspect
       if (parameters.mesh_deformation_enabled)
         x_system.push_back( &mesh_deformation->mesh_velocity );
 
-      std::vector<const LinearAlgebra::Vector *> x_fs_system (1);
+      std::vector<const LinearAlgebra::Vector *> x_fs_system (2);
 
       if (parameters.mesh_deformation_enabled)
         {
           x_fs_system[0] = &mesh_deformation->mesh_displacements;
+          x_fs_system[1] = &mesh_deformation->initial_topography;
           mesh_deformation_trans
             = std_cxx14::make_unique<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector>>
               (mesh_deformation->mesh_deformation_dof_handler);
@@ -1749,36 +1605,6 @@ namespace aspect
       // Possibly store data of plugins associated with cells
       signals.pre_refinement_store_user_data(triangulation);
 
-
-      {
-        // Communicate refinement flags on ghost cells from the owner of the
-        // cell. This is necessary to get consistent refinement, as mesh
-        // smoothing would undo some of the requested coarsening/refinement.
-
-        auto pack
-        = [] (const typename DoFHandler<dim>::active_cell_iterator &cell) -> unsigned int
-        {
-          if (cell->refine_flag_set())
-            return 1;
-          if (cell->coarsen_flag_set())
-            return 2;
-          return 0;
-        };
-        auto unpack
-        = [] (const typename DoFHandler<dim>::active_cell_iterator &cell, const unsigned int &flag) -> void
-        {
-          cell->clear_coarsen_flag();
-          cell->clear_refine_flag();
-          if (flag==1)
-            cell->set_refine_flag();
-          else if (flag==2)
-            cell->set_coarsen_flag();
-        };
-
-        GridTools::exchange_cell_data_to_ghosts<unsigned int, DoFHandler<dim>>
-                                                                            (dof_handler, pack, unpack);
-
-      }
       triangulation.prepare_coarsening_and_refinement();
       system_trans.prepare_for_coarsening_and_refinement(x_system);
 
@@ -1837,17 +1663,22 @@ namespace aspect
           constraints.distribute (distributed_mesh_velocity);
           mesh_deformation->mesh_velocity = distributed_mesh_velocity;
 
-          LinearAlgebra::Vector distributed_mesh_displacements;
+          LinearAlgebra::Vector distributed_mesh_displacements, distributed_initial_topography;
 
           distributed_mesh_displacements.reinit(mesh_deformation->mesh_locally_owned,
                                                 mpi_communicator);
+          distributed_initial_topography.reinit(mesh_deformation->mesh_locally_owned,
+                                                mpi_communicator);
 
-          std::vector<LinearAlgebra::Vector *> system_tmp (1);
+          std::vector<LinearAlgebra::Vector *> system_tmp (2);
           system_tmp[0] = &distributed_mesh_displacements;
+          system_tmp[1] = &distributed_initial_topography;
 
           mesh_deformation_trans->interpolate (system_tmp);
           mesh_deformation->mesh_vertex_constraints.distribute (distributed_mesh_displacements);
           mesh_deformation->mesh_displacements = distributed_mesh_displacements;
+          mesh_deformation->mesh_vertex_constraints.distribute (distributed_initial_topography);
+          mesh_deformation->initial_topography = distributed_initial_topography;
         }
 
       // Possibly load data of plugins associated with cells
@@ -2126,6 +1957,4 @@ namespace aspect
   template class Simulator<dim>;
 
   ASPECT_INSTANTIATE(INSTANTIATE)
-
-#undef INSTANTIATE
 }

@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2020 by the authors of the ASPECT code.
+  Copyright (C) 2011 - 2019 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -286,7 +286,7 @@ namespace aspect
 
       // If we are deforming the mesh, also serialize the mesh vertices vector, which
       // uses its own dof handler
-      std::vector<const LinearAlgebra::Vector *> x_fs_system (1);
+      std::vector<const LinearAlgebra::Vector *> x_fs_system (2);
       std::unique_ptr<parallel::distributed::SolutionTransfer<dim,LinearAlgebra::Vector> > mesh_deformation_trans;
       if (parameters.mesh_deformation_enabled)
         {
@@ -295,6 +295,7 @@ namespace aspect
               (mesh_deformation->mesh_deformation_dof_handler);
 
           x_fs_system[0] = &mesh_deformation->mesh_displacements;
+          x_fs_system[1] = &mesh_deformation->initial_topography;
 
 #if DEAL_II_VERSION_GTE(9,1,0)
           mesh_deformation_trans->prepare_for_serialization(x_fs_system);
@@ -367,8 +368,7 @@ namespace aspect
     }
 
     // Wait for everyone to finish writing
-    const int ierr = MPI_Barrier(mpi_communicator);
-    AssertThrowMPI(ierr);
+    MPI_Barrier(mpi_communicator);
 
     // Now rename the snapshots to put the new one in place of the old one.
     // Do this after writing the new one, because writing large checkpoints
@@ -393,12 +393,6 @@ namespace aspect
 #if DEAL_II_VERSION_GTE(9,1,0)
             move_file (parameters.output_directory + "restart.mesh_fixed.data",
                        parameters.output_directory + "restart.mesh_fixed.data.old");
-
-            if (Utilities::fexists(parameters.output_directory + "restart.mesh_variable.data"))
-              {
-                move_file (parameters.output_directory + "restart.mesh_variable.data",
-                           parameters.output_directory + "restart.mesh_variable.data.old");
-              }
 #endif
           }
 
@@ -411,12 +405,6 @@ namespace aspect
 #if DEAL_II_VERSION_GTE(9,1,0)
         move_file (parameters.output_directory + "restart.mesh.new_fixed.data",
                    parameters.output_directory + "restart.mesh_fixed.data");
-
-        if (Utilities::fexists(parameters.output_directory + "restart.mesh.new_variable.data"))
-          {
-            move_file (parameters.output_directory + "restart.mesh.new_variable.data",
-                       parameters.output_directory + "restart.mesh_variable.data");
-          }
 #endif
 
         // from now on, we know that if we get into this
@@ -434,21 +422,30 @@ namespace aspect
   void Simulator<dim>::resume_from_snapshot()
   {
     // first check existence of the two restart files
-    AssertThrow (Utilities::fexists(parameters.output_directory + "restart.mesh"),
-                 ExcMessage ("You are trying to restart a previous computation, "
-                             "but the restart file <"
-                             +
-                             parameters.output_directory + "restart.mesh"
-                             +
-                             "> does not appear to exist!"));
-
-    AssertThrow (Utilities::fexists(parameters.output_directory + "restart.resume.z"),
-                 ExcMessage ("You are trying to restart a previous computation, "
-                             "but the restart file <"
-                             +
-                             parameters.output_directory + "restart.resume.z"
-                             +
-                             "> does not appear to exist!"));
+    {
+      const std::string filename = parameters.output_directory + "restart.mesh";
+      std::ifstream in (filename.c_str());
+      if (!in)
+        AssertThrow (false,
+                     ExcMessage (std::string("You are trying to restart a previous computation, "
+                                             "but the restart file <")
+                                 +
+                                 filename
+                                 +
+                                 "> does not appear to exist!"));
+    }
+    {
+      const std::string filename = parameters.output_directory + "restart.resume.z";
+      std::ifstream in (filename.c_str());
+      if (!in)
+        AssertThrow (false,
+                     ExcMessage (std::string("You are trying to restart a previous computation, "
+                                             "but the restart file <")
+                                 +
+                                 filename
+                                 +
+                                 "> does not appear to exist!"));
+    }
 
     pcout << "*** Resuming from snapshot!" << std::endl << std::endl;
 
@@ -500,11 +497,15 @@ namespace aspect
         parallel::distributed::SolutionTransfer<dim, LinearAlgebra::Vector> mesh_deformation_trans( mesh_deformation->mesh_deformation_dof_handler );
         LinearAlgebra::Vector distributed_mesh_displacements( mesh_deformation->mesh_locally_owned,
                                                               mpi_communicator );
-        std::vector<LinearAlgebra::Vector *> fs_system(1);
+        LinearAlgebra::Vector distributed_initial_topography( mesh_deformation->mesh_locally_owned,
+                                                              mpi_communicator );
+        std::vector<LinearAlgebra::Vector *> fs_system(2);
         fs_system[0] = &distributed_mesh_displacements;
+        fs_system[1] = &distributed_initial_topography;
 
         mesh_deformation_trans.deserialize (fs_system);
         mesh_deformation->mesh_displacements = distributed_mesh_displacements;
+        mesh_deformation->initial_topography = distributed_initial_topography;
       }
 
     // read zlib compressed resume.z
@@ -559,14 +560,6 @@ namespace aspect
                                  ">"));
       }
 
-    // Overwrite the existing statistics file with the one that would have
-    // been current at the time of the snapshot we just read back in. We
-    // do this because the simulation that created the snapshot may have
-    // continued for a few more time steps. The operation here then
-    // effectively truncates the 'statistics' file to the position from
-    // which the current simulation is going to continue.
-    output_statistics();
-
     // We have to compute the constraints here because the vector that tells
     // us if a cell is a melt cell is not saved between restarts.
     if (parameters.include_melt_transport)
@@ -594,18 +587,8 @@ namespace aspect
     ar &pre_refinement_step;
     ar &last_pressure_normalization_adjustment;
 
-    ar &postprocess_manager;
+    ar &postprocess_manager &statistics;
 
-    ar &statistics;
-
-    // We do not serialize the statistics_last_write_size and
-    // statistics_last_hash variables on purpose. This way, upon
-    // restart, they are left at the values initialized by the
-    // Simulator::Simulator() constructor, and this causes the
-    // Simulator::output_statistics() function to write the
-    // whole statistics file anew at the end of the first time
-    // step after restart. See there why this is the
-    // correct behavior after restart.
   }
 }
 
@@ -618,6 +601,4 @@ namespace aspect
   template void Simulator<dim>::resume_from_snapshot();
 
   ASPECT_INSTANTIATE(INSTANTIATE)
-
-#undef INSTANTIATE
 }
