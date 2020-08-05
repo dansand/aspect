@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2011 - 2018 by the authors of the ASPECT code.
+  Copyright (C) 2020 by the authors of the ASPECT code.
 
   This file is part of ASPECT.
 
@@ -61,7 +61,7 @@ namespace aspect
     {
       AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
                   Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
-                  ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries. "));
+                  ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries."));
 
     }
 
@@ -387,7 +387,6 @@ namespace aspect
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
 
-      // TODO Do we need to update anything for the vertex distance?
       FEFaceValues<dim> fs_fe_face_values (this->get_mapping(), mesh_deformation_dof_handler.get_fe(), face_quadrature, update_default);
 
       double min_local_conduction_timestep = std::numeric_limits<double>::max();
@@ -405,7 +404,7 @@ namespace aspect
                 if (boundary_ids.find(boundary_indicator) == boundary_ids.end())
                   continue;
 
-                // Reninitalize update flags for current cell face
+                // Reinitialize update flags for current cell face
                 fs_fe_face_values.reinit (fscell, face_no);
 
                 // Calculate the corresponding conduction timestep, if applicable
@@ -495,10 +494,10 @@ namespace aspect
         {
           prm.declare_entry("Hillslope transport coefficient", "1e-6",
                             Patterns::Double(0),
-                            "The hillslope transport coefficient used to "
+                            "The hillslope transport coefficient $\\kappa$ used to "
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
-                            "and depositional processes. Units: m2/s. ");
+                            "and depositional processes. Units: $\\text{m}^2/\\text{s}$. ");
           prm.declare_entry("Time between diffusion", "1e20",
                             Patterns::Double(0,std::numeric_limits<double>::max()),
                             "The time between each application of diffusion. "
@@ -507,7 +506,7 @@ namespace aspect
                             "seconds otherwise.");
           prm.declare_entry("Time steps between diffusion", "1",
                             Patterns::Integer(0,std::numeric_limits<int>::max()),
-                            "The maximum number of time steps between each application of "
+                            "The number of time steps between each application of "
                             "diffusion.");
         }
         prm.leave_subsection();
