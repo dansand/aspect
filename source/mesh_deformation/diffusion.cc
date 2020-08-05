@@ -117,7 +117,7 @@ namespace aspect
                                           const std::set<types::boundary_id> boundary_ids) const
     {
       // Check that the current timestep does not exceed the diffusion timestep
-      compute_time_step(mesh_deformation_dof_handler, boundary_ids);
+      check_diffusion_time_step(mesh_deformation_dof_handler, boundary_ids);
 
       // Set up constraints
       AffineConstraints<double> matrix_constraints(mesh_locally_relevant);
@@ -393,7 +393,7 @@ namespace aspect
 
 
     template <int dim>
-    void Diffusion<dim>::compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
+    void Diffusion<dim>::check_diffusion_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
                                             const std::set<types::boundary_id> &boundary_ids) const
     {
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces

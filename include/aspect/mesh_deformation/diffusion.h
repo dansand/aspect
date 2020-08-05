@@ -97,7 +97,7 @@ namespace aspect
          * surface. The computed time step has to satisfy the CFL
          * number chosen in the input parameter file on each cell of the mesh.
          */
-        void compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
+        void check_diffusion_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
                                 const std::set<types::boundary_id> &boundary_ids) const;
 
         /**
