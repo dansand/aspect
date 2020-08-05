@@ -62,7 +62,6 @@ namespace aspect
       AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
                   Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
                   ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries."));
-
     }
 
 
@@ -121,35 +120,48 @@ namespace aspect
       compute_time_step(mesh_deformation_dof_handler, boundary_ids);
 
       // Set up constraints
-      ConstraintMatrix mass_matrix_constraints(mesh_locally_relevant);
+      AffineConstraints<double> mass_matrix_constraints(mesh_locally_relevant);
       DoFTools::make_hanging_node_constraints(mesh_deformation_dof_handler, mass_matrix_constraints);
 
-      typedef std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> > periodic_boundary_pairs;
-      periodic_boundary_pairs pbp = this->get_geometry_model().get_periodic_boundary_pairs();
-      for (periodic_boundary_pairs::iterator p = pbp.begin(); p != pbp.end(); ++p)
+      using periodic_boundary_pairs = std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> >;
+      const periodic_boundary_pairs pbp = this->get_geometry_model().get_periodic_boundary_pairs();
+      for (periodic_boundary_pairs::const_iterator p = pbp.begin(); p != pbp.end(); ++p)
         DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler,
                                                (*p).first.first, (*p).first.second, (*p).second, mass_matrix_constraints);
 
-      // The list of boundary indicators fow which we need to set
+      // The list of boundary indicators for which we need to set
       // zero mesh velocities, which means the zero/prescribed Stokes velocity
       // boundaries minus those that are listed as Additional
       // tangential boundary indicators.
-      std::set<types::boundary_id> x_zero_boundary_indicators = zero_boundary_velocity_indicators;
+
+      // The list of prescribed Stokes velocity boundary indicators.
+      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
+        this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
+      std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
+      //for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
+      //     p != active_boundary_velocity_indicators.end(); ++p)
+      for (auto p = active_boundary_velocity_indicators.begin();
+           p != active_boundary_velocity_indicators.end(); ++p)
+        prescribed_boundary_velocity_indicators.insert(p->first);
+      // The list of zero Stokes velocity boundary indicators.
+      std::set<types::boundary_id> x_zero_boundary_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
       x_zero_boundary_indicators.insert(prescribed_boundary_velocity_indicators.begin(), prescribed_boundary_velocity_indicators.end());
+      // Remove Additional tangential boundary indicators from the list of prescribed velocity
+      // boundary indicators.
       for (std::set<types::boundary_id>::const_iterator p = x_zero_boundary_indicators.begin();
            p != x_zero_boundary_indicators.end(); ++p)
         if (boundary_ids.find(*p) == boundary_ids.end())
           if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
             {
               VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                        ZeroFunction<dim>(dim), mass_matrix_constraints);
+                                                        dealii::Functions::ZeroFunction<dim>(dim), mass_matrix_constraints);
             }
 
       // The list of boundary indicators for which we need to set
       // no_normal_flux_constraints, which means all
       // minus the diffusion mesh deformation boundary indicators
       // and minus the zero/prescribed Stokes velocity boundary indicators.
-      std::set<types::boundary_id> x_no_flux_boundary_indicators = tangential_boundary_velocity_indicators;
+      std::set<types::boundary_id> x_no_flux_boundary_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
       x_no_flux_boundary_indicators.insert(additional_tangential_mesh_boundary_indicators.begin(),additional_tangential_mesh_boundary_indicators.end());
       for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
            p != x_no_flux_boundary_indicators.end(); ++p)
@@ -202,7 +214,7 @@ namespace aspect
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
       // Update shape function values and gradients, the quadrature points and the Jacobian x quadrature weights.
-      UpdateFlags update_flags = UpdateFlags(update_values | update_gradients | update_quadrature_points | update_normal_vectors | update_JxW_values);
+      const UpdateFlags update_flags = UpdateFlags(update_values | update_gradients | update_quadrature_points | update_normal_vectors | update_JxW_values);
       // We want to extract the displacement at the free surface faces of the mesh deformation element.
       FEFaceValues<dim> fs_fe_face_values (this->get_mapping(), mesh_deformation_dof_handler.get_fe(), face_quadrature, update_flags);
       // and to solve on the whole mesh deformation mesh
@@ -296,7 +308,7 @@ namespace aspect
 
                     // Compute the total displacement in the gravity direction,
                     // i.e. the initial topography + any additional mesh displacement.
-                    const double displacement = (displacement_values[point] * direction) + (initial_topography_values[point] * direction);
+                    const double displacement = direction * (displacement_values[point] + initial_topography_values[point]);
 
                     // To project onto the tangent space of the surface,
                     // we define the projection P:= I- n x n,
@@ -331,7 +343,8 @@ namespace aspect
                             cell_matrix(i,j) +=
                               (
                                 this->get_timestep() * diffusivity *
-                                projection * fs_fe_face_values.shape_grad(i, point) * projection * fs_fe_face_values.shape_grad(j,point) +
+                                (projection * fs_fe_face_values.shape_grad(i, point)) *
+                                (projection * fs_fe_face_values.shape_grad(j, point)) +
                                 fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point)
                               )
                               * fs_fe_face_values.JxW(point);
@@ -354,7 +367,7 @@ namespace aspect
       preconditioner_mass.initialize(mass_matrix, preconditioner_control);
 
       this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
-      SolverControl solver_control(50*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
+      SolverControl solver_control(5*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
       cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
 
@@ -365,24 +378,24 @@ namespace aspect
       // Therefore, we compute v=d_displacement/d_t.
       // d_displacement are the new mesh node locations
       // minus the old locations, which are initial_topography + displacements.
-      LinearAlgebra::Vector d_displacement(mesh_locally_owned, mesh_locally_relevant, this->get_mpi_communicator());
-      d_displacement = solution;
-      d_displacement -= initial_topography;
-      d_displacement -= displacements;
+      LinearAlgebra::Vector velocity(mesh_locally_owned, mesh_locally_relevant, this->get_mpi_communicator());
+      velocity = solution;
+      velocity -= initial_topography;
+      velocity -= displacements;
 
       // The velocity
       if (this->get_timestep() > 0.)
-        d_displacement /= this->get_timestep();
+        velocity /= this->get_timestep();
       else
-        d_displacement = 0.;
+        velocity = 0.;
 
-      output = d_displacement;
+      output = velocity;
     }
 
 
     template <int dim>
     void Diffusion<dim>::compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
-                                            const std::set<types::boundary_id> boundary_ids) const
+                                            const std::set<types::boundary_id> &boundary_ids) const
     {
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
@@ -391,6 +404,7 @@ namespace aspect
 
       double min_local_conduction_timestep = std::numeric_limits<double>::max();
 
+      if (diffusivity > 0.)
       for (const auto &fscell : mesh_deformation_dof_handler.active_cell_iterators())
         if (fscell->at_boundary() && fscell->is_locally_owned())
           for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
@@ -407,23 +421,19 @@ namespace aspect
                 // Reinitialize update flags for current cell face
                 fs_fe_face_values.reinit (fscell, face_no);
 
-                // Calculate the corresponding conduction timestep, if applicable
-                if (diffusivity > 0.)
-                  {
+                // Calculate the corresponding conduction timestep
                     min_local_conduction_timestep = std::min(min_local_conduction_timestep,
-                                                             this->get_parameters().CFL_number*pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
+                                                             this->get_parameters().CFL_number*std::pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
                                                              / diffusivity);
-
-                  }
               }
 
       // Get the global minimum timestep
-      const double min_conduction_timestep = - Utilities::MPI::max (-min_local_conduction_timestep, this->get_mpi_communicator());
+      const double min_conduction_timestep = Utilities::MPI::min (min_local_conduction_timestep, this->get_mpi_communicator());
 
-      AssertThrow (min_conduction_timestep > 0.,
-                   ExcMessage("The time step length for diffusion of the surface needs to be positive, "
-                              "but the computed step length was: " + std::to_string(min_conduction_timestep) + ". "
-                              "Please check for non-positive diffusivity."));
+//      AssertThrow (min_conduction_timestep > 0.,
+//                   ExcMessage("The time step length for diffusion of the surface needs to be positive, "
+//                              "but the computed step length was: " + std::to_string(min_conduction_timestep) + ". "
+//                              "Please check for non-positive diffusivity."));
 
       double conduction_timestep = min_conduction_timestep;
       if (this->convert_output_to_years())
@@ -519,15 +529,10 @@ namespace aspect
     void Diffusion<dim>::parse_parameters(ParameterHandler &prm)
     {
       // The list of tangential Stokes velocity boundary indicators.
-      tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
+      //tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
       // The list of zero Stokes velocity boundary indicators.
-      zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
-      // The list of prescribed Stokes velocity boundary indicators.
-      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
-        this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
-      for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
-           p != active_boundary_velocity_indicators.end(); ++p)
-        prescribed_boundary_velocity_indicators.insert(p->first);
+      //zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
+
 
       prm.enter_subsection ("Mesh deformation");
       {

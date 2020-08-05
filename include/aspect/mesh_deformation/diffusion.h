@@ -98,7 +98,7 @@ namespace aspect
          * number chosen in the input parameter file on each cell of the mesh.
          */
         void compute_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
-                                const std::set<types::boundary_id> boundary_ids) const;
+                                const std::set<types::boundary_id> &boundary_ids) const;
 
         /**
          * The hillslope transport coefficient or diffusivity [m2/s]
@@ -160,7 +160,7 @@ namespace aspect
         /**
          * Boundaries along which the Stokes velocity is set to tangential.
          */
-        std::set<types::boundary_id> tangential_boundary_velocity_indicators;
+        //std::set<types::boundary_id> tangential_boundary_velocity_indicators;
 
         /**
          * Boundaries along which the mesh is allowed to move tangentially
@@ -171,12 +171,12 @@ namespace aspect
         /**
          * Boundaries along which the Stokes velocity is set to zero.
          */
-        std::set<types::boundary_id> zero_boundary_velocity_indicators;
+        //std::set<types::boundary_id> zero_boundary_velocity_indicators;
 
         /**
          * Boundaries along which the Stokes velocity is prescribed.
          */
-        std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
+        //std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
     };
   }
 }

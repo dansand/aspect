@@ -239,7 +239,7 @@ namespace aspect
 
         /**
          * Return the initial topography stored on
-         * the mesh deformation element.
+         * the Q1 finite element that describes the mesh geometry.
          */
         const LinearAlgebra::Vector &
         get_initial_topography () const;
