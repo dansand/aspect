@@ -120,14 +120,14 @@ namespace aspect
       compute_time_step(mesh_deformation_dof_handler, boundary_ids);
 
       // Set up constraints
-      AffineConstraints<double> mass_matrix_constraints(mesh_locally_relevant);
-      DoFTools::make_hanging_node_constraints(mesh_deformation_dof_handler, mass_matrix_constraints);
+      AffineConstraints<double> matrix_constraints(mesh_locally_relevant);
+      DoFTools::make_hanging_node_constraints(mesh_deformation_dof_handler, matrix_constraints);
 
       using periodic_boundary_pairs = std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> >;
       const periodic_boundary_pairs pbp = this->get_geometry_model().get_periodic_boundary_pairs();
       for (periodic_boundary_pairs::const_iterator p = pbp.begin(); p != pbp.end(); ++p)
         DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler,
-                                               (*p).first.first, (*p).first.second, (*p).second, mass_matrix_constraints);
+                                               (*p).first.first, (*p).first.second, (*p).second, matrix_constraints);
 
       // The list of boundary indicators for which we need to set
       // zero mesh velocities, which means the zero/prescribed Stokes velocity
@@ -154,7 +154,7 @@ namespace aspect
           if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
             {
               VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                        dealii::Functions::ZeroFunction<dim>(dim), mass_matrix_constraints);
+                                                        dealii::Functions::ZeroFunction<dim>(dim), matrix_constraints);
             }
 
       // The list of boundary indicators for which we need to set
@@ -175,12 +175,12 @@ namespace aspect
                                                        /* first_vector_component= */
                                                        0,
                                                        x_no_flux_boundary_indicators,
-                                                       mass_matrix_constraints, this->get_mapping());
+                                                       matrix_constraints, this->get_mapping());
 
-      mass_matrix_constraints.close();
+      matrix_constraints.close();
 
       // Set up the system to solve
-      LinearAlgebra::SparseMatrix mass_matrix;
+      LinearAlgebra::SparseMatrix matrix;
 
       // Sparsity of the matrix
 #ifdef ASPECT_USE_PETSC
@@ -192,7 +192,7 @@ namespace aspect
                                             mesh_locally_relevant,
                                             this->get_mpi_communicator());
 #endif
-      DoFTools::make_sparsity_pattern (mesh_deformation_dof_handler, sp, mass_matrix_constraints, false,
+      DoFTools::make_sparsity_pattern (mesh_deformation_dof_handler, sp, matrix_constraints, false,
                                        Utilities::MPI::this_mpi_process(this->get_mpi_communicator()));
 
 #ifdef ASPECT_USE_PETSC
@@ -204,7 +204,7 @@ namespace aspect
       mass_matrix.reinit (mesh_locally_owned, mesh_locally_owned, sp, this->get_mpi_communicator());
 #else
       sp.compress();
-      mass_matrix.reinit (sp);
+      matrix.reinit (sp);
 #endif
 
       LinearAlgebra::Vector system_rhs, solution;
@@ -350,29 +350,28 @@ namespace aspect
                               * fs_fe_face_values.JxW(point);
                           }
                       }
-
                   }
 
-                mass_matrix_constraints.distribute_local_to_global (cell_matrix, cell_vector,
-                                                                    cell_dof_indices, mass_matrix, system_rhs, false);
+                matrix_constraints.distribute_local_to_global (cell_matrix, cell_vector,
+                                                                    cell_dof_indices, matrix, system_rhs, false);
               }
 
       system_rhs.compress (VectorOperation::add);
-      mass_matrix.compress(VectorOperation::add);
+      matrix.compress(VectorOperation::add);
 
       // Jacobi seems to be fine here.  Other preconditioners (ILU, IC) run into trouble
       // because the matrix is mostly empty, since we don't touch internal vertices.
       LinearAlgebra::PreconditionJacobi preconditioner_mass;
       LinearAlgebra::PreconditionJacobi::AdditionalData preconditioner_control(1,1e-16,1);
-      preconditioner_mass.initialize(mass_matrix, preconditioner_control);
+      preconditioner_mass.initialize(matrix, preconditioner_control);
 
       this->get_pcout() << "   Solving mesh surface diffusion" << std::endl;
       SolverControl solver_control(5*system_rhs.size(), this->get_parameters().linear_stokes_solver_tolerance*system_rhs.l2_norm());
       SolverCG<LinearAlgebra::Vector> cg(solver_control);
-      cg.solve (mass_matrix, solution, system_rhs, preconditioner_mass);
+      cg.solve (matrix, solution, system_rhs, preconditioner_mass);
 
       // Distribute constraints on mass matrix
-      mass_matrix_constraints.distribute (solution);
+      matrix_constraints.distribute (solution);
 
       // The solution contains the new displacements, but we need to return a velocity.
       // Therefore, we compute v=d_displacement/d_t.
@@ -404,7 +403,6 @@ namespace aspect
 
       double min_local_conduction_timestep = std::numeric_limits<double>::max();
 
-      if (diffusivity > 0.)
       for (const auto &fscell : mesh_deformation_dof_handler.active_cell_iterators())
         if (fscell->at_boundary() && fscell->is_locally_owned())
           for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
@@ -429,11 +427,6 @@ namespace aspect
 
       // Get the global minimum timestep
       const double min_conduction_timestep = Utilities::MPI::min (min_local_conduction_timestep, this->get_mpi_communicator());
-
-//      AssertThrow (min_conduction_timestep > 0.,
-//                   ExcMessage("The time step length for diffusion of the surface needs to be positive, "
-//                              "but the computed step length was: " + std::to_string(min_conduction_timestep) + ". "
-//                              "Please check for non-positive diffusivity."));
 
       double conduction_timestep = min_conduction_timestep;
       if (this->convert_output_to_years())
@@ -528,12 +521,6 @@ namespace aspect
     template <int dim>
     void Diffusion<dim>::parse_parameters(ParameterHandler &prm)
     {
-      // The list of tangential Stokes velocity boundary indicators.
-      //tangential_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
-      // The list of zero Stokes velocity boundary indicators.
-      //zero_boundary_velocity_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
-
-
       prm.enter_subsection ("Mesh deformation");
       {
         // Create the list of tangential mesh movement boundary indicators.
@@ -579,9 +566,26 @@ namespace aspect
                                            "diffusion",
                                            "A plugin that computes the deformation of surface "
                                            "vertices according to the solution of the hillslope diffusion problem. "
-                                           "Diffusion can be applied every timestep, mimicking surface processing, "
-                                           "or at a user-defined time or timestep interval to purely smooth the surface "
-                                           "topography to avoid too great distortion of mesh elements when a free "
-                                           "surface is used.")
+                                           "Specifically, at the end of each timestep, or at other intervals (see below), "
+                                           "this plugin solves the following equation: "
+                                           "\\begin{align*}"
+                                           "  \\frac{\\partial h}{\\partial t} = \\kappa \\left( \\frac{\\partial^{2} h}{\\partial x^{2}} + \\frac{\\partial^{2} h}{\\partial y^{2}} \\right), "
+                                           "\\end{align} "
+                                           "where $\\kappa$ is the hillslope diffusion coefficient (diffusivity), and $h(x,y)$ the "
+                                           "height of a point along the top boundary with respect to  the surface of the unperturbed domain. "
+                                           "\n\n"
+                                           "Using this definition, the plugin then solves for one time step, i.e., "
+                                           "using as initial condition $h(t_{n-1})$ the current surface elevation, "
+                                           "and computing $h(t_n)$ from it by solving the equation above over "
+                                           "the time interval $t_n-t_{n-1}$. From this, one can then compute "
+                                           "a surface velocity $v = \\frac{h(t_n)-h(t_{n-1})}{t_n-t_{n-1}}$. "
+                                           "\n\n"
+                                           "This surface velocity is used to deform the surface and as a boundary condition "
+                                           "for solving the Laplace equation to determing the mesh velocity in the "
+                                           "domain interior. "
+                                           "Diffusion can be applied every timestep, mimicking surface processes of erosion "
+                                           "and deposition, or at a user-defined time or timestep interval to purely smooth the surface "
+                                           "topography to avoid too great a distortion of mesh elements when a free "
+                                           "surface is also used.")
   }
 }

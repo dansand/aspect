@@ -1,4 +1,4 @@
-This directory contains to benchmarks of a 2D hill diffusion away
+This directory contains two benchmarks of a 2D hill diffusing away
 over time. In the first benchmark, 1_sine_zero_flux.prm, the left
 and right boundary condition for diffusion is zero flux, so the
 topography of the left and right mesh corner point increases
