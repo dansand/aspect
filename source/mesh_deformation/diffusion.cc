@@ -353,7 +353,7 @@ namespace aspect
                   }
 
                 matrix_constraints.distribute_local_to_global (cell_matrix, cell_vector,
-                                                                    cell_dof_indices, matrix, system_rhs, false);
+                                                               cell_dof_indices, matrix, system_rhs, false);
               }
 
       system_rhs.compress (VectorOperation::add);
@@ -394,7 +394,7 @@ namespace aspect
 
     template <int dim>
     void Diffusion<dim>::check_diffusion_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
-                                            const std::set<types::boundary_id> &boundary_ids) const
+                                                    const std::set<types::boundary_id> &boundary_ids) const
     {
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
       const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
@@ -420,9 +420,9 @@ namespace aspect
                 fs_fe_face_values.reinit (fscell, face_no);
 
                 // Calculate the corresponding conduction timestep
-                    min_local_conduction_timestep = std::min(min_local_conduction_timestep,
-                                                             this->get_parameters().CFL_number*std::pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
-                                                             / diffusivity);
+                min_local_conduction_timestep = std::min(min_local_conduction_timestep,
+                                                         this->get_parameters().CFL_number*std::pow(fscell->face(face_no)->minimum_vertex_distance(),2.)
+                                                         / diffusivity);
               }
 
       // Get the global minimum timestep

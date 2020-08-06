@@ -98,7 +98,7 @@ namespace aspect
          * number chosen in the input parameter file on each cell of the mesh.
          */
         void check_diffusion_time_step (const DoFHandler<dim> &mesh_deformation_dof_handler,
-                                const std::set<types::boundary_id> &boundary_ids) const;
+                                        const std::set<types::boundary_id> &boundary_ids) const;
 
         /**
          * The hillslope transport coefficient or diffusivity [m2/s]
