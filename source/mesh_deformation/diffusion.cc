@@ -142,7 +142,7 @@ namespace aspect
           if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
             {
               VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                        ZeroFunction<dim>(dim), mass_matrix_constraints);
+                                                        Functions::ZeroFunction<dim>(dim), mass_matrix_constraints);
             }
 
       // The list of boundary indicators for which we need to set

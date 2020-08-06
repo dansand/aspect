@@ -376,7 +376,7 @@ namespace aspect
         if (mesh_deformation_boundary_indicators_set.find(*p) == mesh_deformation_boundary_indicators_set.end())
           {
             VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                      ZeroFunction<dim>(dim), mesh_velocity_constraints);
+                                                      Functions::ZeroFunction<dim>(dim), mesh_velocity_constraints);
           }
 
       // Zero out the displacement for the prescribed velocity boundaries
@@ -389,7 +389,7 @@ namespace aspect
               if (mesh_deformation_boundary_indicators_set.find(p->first) == mesh_deformation_boundary_indicators_set.end())
                 {
                   VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, p->first,
-                                                            ZeroFunction<dim>(dim), mesh_velocity_constraints);
+                                                            Functions::ZeroFunction<dim>(dim), mesh_velocity_constraints);
                 }
             }
         }
