@@ -44,7 +44,6 @@ namespace aspect
       :
       diffusivity(0.),
       start_time(std::numeric_limits<double>::quiet_NaN()),
-      current_time(0.),
       last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
       time_between_diffusion(std::numeric_limits<double>::max()),
       start_timestep(0),
@@ -78,7 +77,7 @@ namespace aspect
         }
 
       // Set the current time and timestep
-      current_time = (this->get_time());
+      const double current_time = (this->get_time());
       const unsigned int current_timestep_number = this->get_timestep_number();
 
       // Determine whether we need to apply diffusion based
@@ -138,8 +137,6 @@ namespace aspect
       const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
         this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
       std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
-      //for (std::map<types::boundary_id, std::pair<std::string, std::vector<std::string> > >::const_iterator p = active_boundary_velocity_indicators.begin();
-      //     p != active_boundary_velocity_indicators.end(); ++p)
       for (auto p = active_boundary_velocity_indicators.begin();
            p != active_boundary_velocity_indicators.end(); ++p)
         prescribed_boundary_velocity_indicators.insert(p->first);
@@ -212,7 +209,7 @@ namespace aspect
       solution.reinit(mesh_locally_owned, this->get_mpi_communicator());
 
       // Initialize Gauss-Legendre quadrature for degree+1 quadrature points of the surface faces
-      QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
+      const QGauss<dim-1> face_quadrature(mesh_deformation_dof_handler.get_fe().degree+1);
       // Update shape function values and gradients, the quadrature points and the Jacobian x quadrature weights.
       const UpdateFlags update_flags = UpdateFlags(update_values | update_gradients | update_quadrature_points | update_normal_vectors | update_JxW_values);
       // We want to extract the displacement at the free surface faces of the mesh deformation element.
@@ -262,7 +259,7 @@ namespace aspect
       // Cell iterator over the MeshDeformation FE
       typename DoFHandler<dim>::active_cell_iterator
       fscell = mesh_deformation_dof_handler.begin_active(),
-      fsendc= mesh_deformation_dof_handler.end();
+      fsendc = mesh_deformation_dof_handler.end();
 
       // Iterate over all cells to find those at the mesh deformation boundary
       for (; fscell!=fsendc; ++fscell)
@@ -322,32 +319,31 @@ namespace aspect
                       {
                         // Make sure we only assemble for the y-component
                         // TODO this is only correct for box geometries
-                        if (mesh_deformation_dof_handler.get_fe().system_to_component_index(i).first != dim-1)
-                          continue;
-
+                        if (mesh_deformation_dof_handler.get_fe().system_to_component_index(i).first == dim-1)
+{
                         // Assemble the RHS
                         // RHS = M*H_old
-                        cell_vector(i) += displacement *
-                                          fs_fe_face_values.shape_value (i, point) *
-                                          fs_fe_face_values.JxW(point);
+                        cell_vector(i) += fs_fe_face_values.shape_value (i, point) * displacement * fs_fe_face_values.JxW(point);
 
 
                         for (unsigned int j=0; j<dofs_per_cell; ++j)
                           {
                             // Make sure we only assemble for the y-component
                             // TODO this is only correct for box geometries
-                            if (mesh_deformation_dof_handler.get_fe().system_to_component_index(j).first != dim-1)
-                              continue;
+                            if (mesh_deformation_dof_handler.get_fe().system_to_component_index(j).first == dim-1)
+                              {
                             // Assemble the matrix, for backward first order time discretization:
                             // Matrix := (M+dt*K) = (M+dt*B^T*kappa*B)
                             cell_matrix(i,j) +=
                               (
+                                fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point) +
                                 this->get_timestep() * diffusivity *
                                 (projection * fs_fe_face_values.shape_grad(i, point)) *
-                                (projection * fs_fe_face_values.shape_grad(j, point)) +
-                                fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point)
+                                (projection * fs_fe_face_values.shape_grad(j, point))
                               )
                               * fs_fe_face_values.JxW(point);
+                              }
+                          }
                           }
                       }
                   }
@@ -386,7 +382,7 @@ namespace aspect
       if (this->get_timestep() > 0.)
         velocity /= this->get_timestep();
       else
-        velocity = 0.;
+        AssertThrow(false, ExcZero());
 
       output = velocity;
     }
@@ -435,7 +431,8 @@ namespace aspect
       AssertThrow (this->get_timestep() <= min_conduction_timestep,
                    ExcMessage("The numerical timestep is too large for diffusion of the surface. Although the "
                               "diffusion scheme is stable, note that the error increases linearly with the timestep. "
-                              "The diffusion timestep is: " + std::to_string(conduction_timestep) + ". "));
+                              "The diffusion timestep is: " + std::to_string(conduction_timestep) + ", while "
+                              "the advection timestep is: " + std::to_string (this->get_timestep ())));
     }
 
 
@@ -572,7 +569,7 @@ namespace aspect
                                            "  \\frac{\\partial h}{\\partial t} = \\kappa \\left( \\frac{\\partial^{2} h}{\\partial x^{2}} + \\frac{\\partial^{2} h}{\\partial y^{2}} \\right), "
                                            "\\end{align} "
                                            "where $\\kappa$ is the hillslope diffusion coefficient (diffusivity), and $h(x,y)$ the "
-                                           "height of a point along the top boundary with respect to  the surface of the unperturbed domain. "
+                                           "height of a point along the top boundary with respect to the surface of the unperturbed domain. "
                                            "\n\n"
                                            "Using this definition, the plugin then solves for one time step, i.e., "
                                            "using as initial condition $h(t_{n-1})$ the current surface elevation, "
@@ -581,7 +578,7 @@ namespace aspect
                                            "a surface velocity $v = \\frac{h(t_n)-h(t_{n-1})}{t_n-t_{n-1}}$. "
                                            "\n\n"
                                            "This surface velocity is used to deform the surface and as a boundary condition "
-                                           "for solving the Laplace equation to determing the mesh velocity in the "
+                                           "for solving the Laplace equation to determine the mesh velocity in the "
                                            "domain interior. "
                                            "Diffusion can be applied every timestep, mimicking surface processes of erosion "
                                            "and deposition, or at a user-defined time or timestep interval to purely smooth the surface "

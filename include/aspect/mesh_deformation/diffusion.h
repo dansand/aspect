@@ -115,12 +115,6 @@ namespace aspect
         double start_time;
 
         /**
-         * The current time used to determine whether diffusion should
-         * be applied.
-         */
-        double current_time;
-
-        /**
          * The last time at which diffusion was supposed
          * to be applied. Used to check for the next necessary
          * application of diffusion.
@@ -158,25 +152,10 @@ namespace aspect
         bool apply_diffusion;
 
         /**
-         * Boundaries along which the Stokes velocity is set to tangential.
-         */
-        //std::set<types::boundary_id> tangential_boundary_velocity_indicators;
-
-        /**
          * Boundaries along which the mesh is allowed to move tangentially
          * despite of the Stokes velocity boundary conditions.
          */
         std::set<types::boundary_id> additional_tangential_mesh_boundary_indicators;
-
-        /**
-         * Boundaries along which the Stokes velocity is set to zero.
-         */
-        //std::set<types::boundary_id> zero_boundary_velocity_indicators;
-
-        /**
-         * Boundaries along which the Stokes velocity is prescribed.
-         */
-        //std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
     };
   }
 }

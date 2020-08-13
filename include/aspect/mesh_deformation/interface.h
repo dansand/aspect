@@ -240,6 +240,11 @@ namespace aspect
         /**
          * Return the initial topography stored on
          * the Q1 finite element that describes the mesh geometry.
+         * Note that a topography is set for all mesh nodes,
+         * but only the values of surface boundary nodes are correct.
+         * The internal nodes get the same initial topography as the
+         * corresponding surface node. In other words, there is
+         * no decrease of the initial topography with depth.
          */
         const LinearAlgebra::Vector &
         get_initial_topography () const;
