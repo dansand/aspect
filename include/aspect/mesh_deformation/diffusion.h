@@ -107,38 +107,6 @@ namespace aspect
          */
         double diffusivity;
 
-        /**
-         * The start time of the model run
-         * used to determine whether diffusion should
-         * be applied.
-         */
-        double start_time;
-
-        /**
-         * The last time at which diffusion was supposed
-         * to be applied. Used to check for the next necessary
-         * application of diffusion.
-         */
-        double last_diffusion_time;
-
-        /**
-         * The amount of model time between applying diffusion
-         * to the boundary with the given mesh deformation boundary indicator.
-         */
-        double time_between_diffusion;
-
-        /**
-         * The start timestep of the model run
-         * used to determine whether diffusion should
-         * be applied.
-         */
-        unsigned int start_timestep;
-
-        /**
-         * Last timestep at which diffusion was applied.
-         * Used to check for the next necessary diffusion application.
-         */
-        unsigned int last_diffusion_timestep;
 
         /**
          * Maximum number of steps between the application of diffusion.

@@ -43,11 +43,6 @@ namespace aspect
     Diffusion<dim>::Diffusion()
       :
       diffusivity(0.),
-      start_time(std::numeric_limits<double>::quiet_NaN()),
-      last_diffusion_time(std::numeric_limits<double>::quiet_NaN()),
-      time_between_diffusion(std::numeric_limits<double>::max()),
-      start_timestep(0),
-      last_diffusion_timestep (1),
       timesteps_between_diffusion (1),
       apply_diffusion(false)
     {}
@@ -69,41 +64,18 @@ namespace aspect
     void
     Diffusion<dim>::update ()
     {
-      // Initialize the start time and timestep
-      if (std::isnan(start_time))
-        {
-          start_time = (this->get_time());
-          start_timestep = this->get_timestep_number();
-        }
-
-      // Set the current time and timestep
-      const double current_time = (this->get_time());
+      // Set the current timestep number
       const unsigned int current_timestep_number = this->get_timestep_number();
 
       // Determine whether we need to apply diffusion based
-      // on the time or timestep interval between applications.
+      // on the timestep interval between applications.
       if (current_timestep_number != 0)
         {
-          if (std::isnan(last_diffusion_time)
-              && ((current_time >= start_time + time_between_diffusion)
-                  || (current_timestep_number >= start_timestep + timesteps_between_diffusion)))
-            apply_diffusion = true;
-          else if (!std::isnan(last_diffusion_time)
-                   && ((current_time >= last_diffusion_time + time_between_diffusion)
-                       || (current_timestep_number >= last_diffusion_timestep + timesteps_between_diffusion)))
+          if (current_timestep_number % timesteps_between_diffusion == 0)
             apply_diffusion = true;
           else
             apply_diffusion = false;
         }
-
-      // If diffusion is applied, set the current time(step) as
-      // the last time(step) of application.
-      if (apply_diffusion)
-        {
-          last_diffusion_time = current_time;
-          last_diffusion_timestep = current_timestep_number;
-        }
-
     }
 
 
@@ -241,7 +213,8 @@ namespace aspect
       LinearAlgebra::Vector displacements = this->get_mesh_deformation_handler().get_mesh_displacements();
 
       // The global initial topography on the MeshDeformation FE
-      // TODO find another way to get to the initial topography?
+      // TODO Once the initial mesh deformation is ready, this
+      // can be removed.
       LinearAlgebra::Vector initial_topography = this->get_mesh_deformation_handler().get_initial_topography();
 
       // Do nothing at time zero
@@ -301,7 +274,12 @@ namespace aspect
                       direction *= 1./direction.norm();
                     // TODO this is only correct for box geometries
                     else
-                      direction[dim-1] = 1.;
+                      {
+                        AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
+                                    Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
+                                    ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries."));
+                        direction[dim-1] = 1.;
+                      }
 
                     // Compute the total displacement in the gravity direction,
                     // i.e. the initial topography + any additional mesh displacement.
@@ -319,31 +297,35 @@ namespace aspect
                       {
                         // Make sure we only assemble for the y-component
                         // TODO this is only correct for box geometries
+                        // Check that a box geometry is used
+                        AssertThrow(Plugins::plugin_type_matches<GeometryModel::Box<dim> >(this->get_geometry_model()) ||
+                                    Plugins::plugin_type_matches<GeometryModel::TwoMergedBoxes<dim> >(this->get_geometry_model()),
+                                    ExcMessage("The surface diffusion mesh deformation plugin only works for Box geometries."));
                         if (mesh_deformation_dof_handler.get_fe().system_to_component_index(i).first == dim-1)
-{
-                        // Assemble the RHS
-                        // RHS = M*H_old
-                        cell_vector(i) += fs_fe_face_values.shape_value (i, point) * displacement * fs_fe_face_values.JxW(point);
-
-
-                        for (unsigned int j=0; j<dofs_per_cell; ++j)
                           {
-                            // Make sure we only assemble for the y-component
-                            // TODO this is only correct for box geometries
-                            if (mesh_deformation_dof_handler.get_fe().system_to_component_index(j).first == dim-1)
+                            // Assemble the RHS
+                            // RHS = M*H_old
+                            cell_vector(i) += fs_fe_face_values.shape_value (i, point) * displacement * fs_fe_face_values.JxW(point);
+
+
+                            for (unsigned int j=0; j<dofs_per_cell; ++j)
                               {
-                            // Assemble the matrix, for backward first order time discretization:
-                            // Matrix := (M+dt*K) = (M+dt*B^T*kappa*B)
-                            cell_matrix(i,j) +=
-                              (
-                                fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point) +
-                                this->get_timestep() * diffusivity *
-                                (projection * fs_fe_face_values.shape_grad(i, point)) *
-                                (projection * fs_fe_face_values.shape_grad(j, point))
-                              )
-                              * fs_fe_face_values.JxW(point);
+                                // Make sure we only assemble for the y-component
+                                // TODO this is only correct for box geometries
+                                if (mesh_deformation_dof_handler.get_fe().system_to_component_index(j).first == dim-1)
+                                  {
+                                    // Assemble the matrix, for backward first order time discretization:
+                                    // Matrix := (M+dt*K) = (M+dt*B^T*kappa*B)
+                                    cell_matrix(i,j) +=
+                                      (
+                                        fs_fe_face_values.shape_value (i, point) * fs_fe_face_values.shape_value (j, point) +
+                                        this->get_timestep() * diffusivity *
+                                        (projection * fs_fe_face_values.shape_grad(i, point)) *
+                                        (projection * fs_fe_face_values.shape_grad(j, point))
+                                      )
+                                      * fs_fe_face_values.JxW(point);
+                                  }
                               }
-                          }
                           }
                       }
                   }
@@ -497,13 +479,7 @@ namespace aspect
                             "The hillslope transport coefficient $\\kappa$ used to "
                             "diffuse the free surface, either as a  "
                             "stabilization step or a to mimic erosional "
-                            "and depositional processes. Units: $\\text{m}^2/\\text{s}$. ");
-          prm.declare_entry("Time between diffusion", "1e20",
-                            Patterns::Double(0,std::numeric_limits<double>::max()),
-                            "The time between each application of diffusion. "
-                            "Units: years if the "
-                            "'Use years in output instead of seconds' parameter is set; "
-                            "seconds otherwise.");
+                            "and depositional processes. Units: $\\si{m^2/s}$. ");
           prm.declare_entry("Time steps between diffusion", "1",
                             Patterns::Integer(0,std::numeric_limits<int>::max()),
                             "The number of time steps between each application of "
@@ -541,10 +517,7 @@ namespace aspect
         prm.enter_subsection ("Diffusion");
         {
           diffusivity                 = prm.get_double("Hillslope transport coefficient");
-          time_between_diffusion      = prm.get_double("Time between diffusion");
           timesteps_between_diffusion = prm.get_integer("Time steps between diffusion");
-          if (this->convert_output_to_years())
-            time_between_diffusion *= year_in_seconds;
         }
         prm.leave_subsection ();
       }
@@ -563,10 +536,11 @@ namespace aspect
                                            "diffusion",
                                            "A plugin that computes the deformation of surface "
                                            "vertices according to the solution of the hillslope diffusion problem. "
-                                           "Specifically, at the end of each timestep, or at other intervals (see below), "
-                                           "this plugin solves the following equation: "
+                                           "Specifically, at the end of each timestep, or after a specific number "
+                                           "of timesteps, this plugin solves the following equation: "
                                            "\\begin{align*}"
-                                           "  \\frac{\\partial h}{\\partial t} = \\kappa \\left( \\frac{\\partial^{2} h}{\\partial x^{2}} + \\frac{\\partial^{2} h}{\\partial y^{2}} \\right), "
+                                           "  \\frac{\\partial h}{\\partial t} = \\kappa \\left( \\frac{\\partial^{2} h}{\\partial x^{2}} "
+                                           "+ \\frac{\\partial^{2} h}{\\partial y^{2}} \\right), "
                                            "\\end{align} "
                                            "where $\\kappa$ is the hillslope diffusion coefficient (diffusivity), and $h(x,y)$ the "
                                            "height of a point along the top boundary with respect to the surface of the unperturbed domain. "
@@ -581,7 +555,7 @@ namespace aspect
                                            "for solving the Laplace equation to determine the mesh velocity in the "
                                            "domain interior. "
                                            "Diffusion can be applied every timestep, mimicking surface processes of erosion "
-                                           "and deposition, or at a user-defined time or timestep interval to purely smooth the surface "
+                                           "and deposition, or at a user-defined timestep interval to purely smooth the surface "
                                            "topography to avoid too great a distortion of mesh elements when a free "
                                            "surface is also used.")
   }
