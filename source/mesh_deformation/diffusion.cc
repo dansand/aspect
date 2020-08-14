@@ -76,6 +76,8 @@ namespace aspect
           else
             apply_diffusion = false;
         }
+
+      std::cout << "Apply diffusion " << apply_diffusion << std::endl;
     }
 
 
@@ -94,56 +96,79 @@ namespace aspect
       AffineConstraints<double> matrix_constraints(mesh_locally_relevant);
       DoFTools::make_hanging_node_constraints(mesh_deformation_dof_handler, matrix_constraints);
 
+      std::set< types::boundary_id > periodic_boundary_indicators;
       using periodic_boundary_pairs = std::set< std::pair< std::pair<types::boundary_id, types::boundary_id>, unsigned int> >;
       const periodic_boundary_pairs pbp = this->get_geometry_model().get_periodic_boundary_pairs();
       for (periodic_boundary_pairs::const_iterator p = pbp.begin(); p != pbp.end(); ++p)
-        DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler,
-                                               (*p).first.first, (*p).first.second, (*p).second, matrix_constraints);
+        {
+          DoFTools::make_periodicity_constraints(mesh_deformation_dof_handler,
+                                                 (*p).first.first, (*p).first.second, (*p).second, matrix_constraints);
+          periodic_boundary_indicators.insert((*p).first.first);
+          periodic_boundary_indicators.insert((*p).first.second);
+        }
 
-      // The list of boundary indicators for which we need to set
-      // zero mesh velocities, which means the zero/prescribed Stokes velocity
-      // boundaries minus those that are listed as Additional
-      // tangential boundary indicators.
+      // A boundary can be:
+      // 1) A mesh deformation boundary with its deformation computed by this plugin.
+      // 2) A zero mesh displacement boundary:
+      //    a) boundaries with zero Stokes velocity that are not an Additional tangential mesh boundary or mesh deformation boundary,
+      //    b) boundaries with prescribed Stokes velocity that are not an Additional tangential mesh boundary or mesh deformation boundary.
+      // 3) A tangential mesh displacement boundary (no normal flux):
+      //    a) tangential Stokes boundaries that are not an Additional tangential mesh boundary or mesh deformation boundary,
+      //    b) additional tangential mesh boundaries,
+      //    c) periodic boundaries that are not an Additional tangential mesh boundary or mesh deformation boundary.
+      // We obtain the zero mesh displacement boundaries by subtracting the mesh deformation ones (1+3) from all used boundary indicators. In this
+      // case, when no Stokes velocity boundary conditions are set (e.g. when using the single Advection,
+      // no Stokes solver scheme, we do end up with mesh displacement boundary conditions.
 
-      // The list of prescribed Stokes velocity boundary indicators.
-      const std::map<types::boundary_id, std::pair<std::string,std::vector<std::string> > > active_boundary_velocity_indicators =
-        this->get_boundary_velocity_manager().get_active_boundary_velocity_names();
-      std::set<types::boundary_id> prescribed_boundary_velocity_indicators;
-      for (auto p = active_boundary_velocity_indicators.begin();
-           p != active_boundary_velocity_indicators.end(); ++p)
-        prescribed_boundary_velocity_indicators.insert(p->first);
-      // The list of zero Stokes velocity boundary indicators.
-      std::set<types::boundary_id> x_zero_boundary_indicators = this->get_boundary_velocity_manager().get_zero_boundary_velocity_indicators();
-      x_zero_boundary_indicators.insert(prescribed_boundary_velocity_indicators.begin(), prescribed_boundary_velocity_indicators.end());
-      // Remove Additional tangential boundary indicators from the list of prescribed velocity
-      // boundary indicators.
-      for (std::set<types::boundary_id>::const_iterator p = x_zero_boundary_indicators.begin();
-           p != x_zero_boundary_indicators.end(); ++p)
-        if (boundary_ids.find(*p) == boundary_ids.end())
-          if (additional_tangential_mesh_boundary_indicators.find(*p) == additional_tangential_mesh_boundary_indicators.end())
-            {
-              VectorTools::interpolate_boundary_values (mesh_deformation_dof_handler, *p,
-                                                        dealii::Functions::ZeroFunction<dim>(dim), matrix_constraints);
-            }
+      // All boundary indicators used by the current geometry.
+      const std::set<types::boundary_id> all_boundaries = this->get_geometry_model().get_used_boundary_indicators();
 
-      // The list of boundary indicators for which we need to set
-      // no_normal_flux_constraints, which means all
-      // minus the diffusion mesh deformation boundary indicators
-      // and minus the zero/prescribed Stokes velocity boundary indicators.
-      std::set<types::boundary_id> x_no_flux_boundary_indicators = this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
-      x_no_flux_boundary_indicators.insert(additional_tangential_mesh_boundary_indicators.begin(),additional_tangential_mesh_boundary_indicators.end());
-      for (std::set<types::boundary_id>::const_iterator p = x_no_flux_boundary_indicators.begin();
-           p != x_no_flux_boundary_indicators.end(); ++p)
-        if (boundary_ids.find(*p) != boundary_ids.end())
-          {
-            x_no_flux_boundary_indicators.erase(*p);
-          }
+      // Get the tangential Stokes velocity boundary indicators.
+      const std::set<types::boundary_id> tangential_velocity_boundary_indicators =
+          this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
+
+      // The list of all tangential mesh deformation boundary indicators.
+      std::set<types::boundary_id> tmp_tangential_boundaries, tmp2_tangential_boundaries, all_tangential_boundaries;
+      std::set_union(tangential_velocity_boundary_indicators.begin(),tangential_velocity_boundary_indicators.end(),
+                     additional_tangential_mesh_boundary_indicators.begin(),additional_tangential_mesh_boundary_indicators.end(),
+                     std::inserter(tmp_tangential_boundaries, tmp_tangential_boundaries.end()));
+      std::set_union(tmp_tangential_boundaries.begin(),tmp_tangential_boundaries.end(),
+                     periodic_boundary_indicators.begin(),periodic_boundary_indicators.end(),
+                     std::inserter(tmp2_tangential_boundaries, tmp2_tangential_boundaries.end()));
+      // Tangential Stokes velocity boundaries can also be mesh deformation boundaries,
+      // so correct for that.
+      std::set_difference(tmp2_tangential_boundaries.begin(),tmp2_tangential_boundaries.end(),
+                     boundary_ids.begin(),boundary_ids.end(),
+                     std::inserter(all_tangential_boundaries, all_tangential_boundaries.end()));
+
+      // The list of mesh deformation boundary indicators of boundaries that are allowed to move either
+      // tangentially or in all directions.
+      std::set<types::boundary_id> all_deformable_boundaries;
+      std::set_union(all_tangential_boundaries.begin(),all_tangential_boundaries.end(),
+                     boundary_ids.begin(),boundary_ids.end(),
+                     std::inserter(all_deformable_boundaries, all_deformable_boundaries.end()));
+
+      // The list of mesh deformation boundary indicators of boundaries that are not allowed to move.
+      std::set<types::boundary_id> all_fixed_boundaries;
+      std::set_difference(all_boundaries.begin(),all_boundaries.end(),
+                          all_deformable_boundaries.begin(),all_deformable_boundaries.end(),
+                          std::inserter(all_fixed_boundaries, all_fixed_boundaries.end()));
 
       // Make the no flux boundary constraints
+      for (const types::boundary_id &boundary_id : all_fixed_boundaries)
+        {
+          VectorTools::interpolate_boundary_values (this->get_mapping(),
+                                                    mesh_deformation_dof_handler,
+                                                    boundary_id,
+                                                    dealii::Functions::ZeroFunction<dim>(dim),
+                                                    matrix_constraints);
+        }
+
+      // Make the no normal flux boundary constraints
       VectorTools::compute_no_normal_flux_constraints (mesh_deformation_dof_handler,
                                                        /* first_vector_component= */
                                                        0,
-                                                       x_no_flux_boundary_indicators,
+                                                       all_tangential_boundaries,
                                                        matrix_constraints, this->get_mapping());
 
       matrix_constraints.close();
