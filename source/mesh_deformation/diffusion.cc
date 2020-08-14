@@ -78,8 +78,6 @@ namespace aspect
           else
             apply_diffusion = false;
         }
-
-      std::cout << "Apply diffusion " << apply_diffusion << std::endl;
     }
 
 
