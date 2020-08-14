@@ -69,6 +69,8 @@ namespace aspect
 
       // Determine whether we need to apply diffusion based
       // on the timestep interval between applications.
+      // Because mesh deformation is computed at the beginning
+      // of each timestep, we do not apply diffusion in the first timestep.
       if (current_timestep_number != 0)
         {
           if (current_timestep_number % timesteps_between_diffusion == 0)
@@ -125,7 +127,7 @@ namespace aspect
 
       // Get the tangential Stokes velocity boundary indicators.
       const std::set<types::boundary_id> tangential_velocity_boundary_indicators =
-          this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
+        this->get_boundary_velocity_manager().get_tangential_boundary_velocity_indicators();
 
       // The list of all tangential mesh deformation boundary indicators.
       std::set<types::boundary_id> tmp_tangential_boundaries, tmp2_tangential_boundaries, all_tangential_boundaries;
@@ -138,8 +140,8 @@ namespace aspect
       // Tangential Stokes velocity boundaries can also be mesh deformation boundaries,
       // so correct for that.
       std::set_difference(tmp2_tangential_boundaries.begin(),tmp2_tangential_boundaries.end(),
-                     boundary_ids.begin(),boundary_ids.end(),
-                     std::inserter(all_tangential_boundaries, all_tangential_boundaries.end()));
+                          boundary_ids.begin(),boundary_ids.end(),
+                          std::inserter(all_tangential_boundaries, all_tangential_boundaries.end()));
 
       // The list of mesh deformation boundary indicators of boundaries that are allowed to move either
       // tangentially or in all directions.

@@ -106,12 +106,9 @@ namespace aspect
     void
     MeshDeformationHandler<dim>::initialize ()
     {
-      // Get pointer to initial topography model
-      //topo_model = const_cast<InitialTopographyModel::Interface<dim>*>(&this->get_initial_topography_model());
       // In case we prescribed initial topography, we should take this into
       // account. However, it is not included in the mesh displacements,
       // so we need to fetch it separately.
-      //if (dynamic_cast<InitialTopographyModel::ZeroTopography<dim>*>(topo_model) == nullptr)
       if (!Plugins::plugin_type_matches<InitialTopographyModel::ZeroTopography<dim>>(this->get_initial_topography_model()))
         include_initial_topography = true;
     }
@@ -651,7 +648,6 @@ namespace aspect
                           surface_point[d] = natural_coord[d];
                       }
                     // Get the topography at this point.
-                    //const double topo = topo_model->value(surface_point);
                     const double topo = this->get_initial_topography_model().value(surface_point);
 
 
